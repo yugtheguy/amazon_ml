@@ -1,0 +1,89 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Data and Artifacts (NEVER COMMIT LARGE FILES)
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/student_resource/dataset/*
+
+artifacts/models/*
+!artifacts/models/.gitkeep
+artifacts/vectorizers/*
+!artifacts/vectorizers/.gitkeep
+artifacts/embeddings/*
+!artifacts/embeddings/.gitkeep
+artifacts/features/*
+!artifacts/features/.gitkeep
+artifacts/diagnostics/*
+!artifacts/diagnostics/.gitkeep
+artifacts/folds/*
+!artifacts/folds/.gitkeep
+artifacts/retrieval/*
+!artifacts/retrieval/.gitkeep
+artifacts/submissions/*
+!artifacts/submissions/.gitkeep
+
+oof/*
+!oof/.gitkeep
+predictions/*
+!predictions/.gitkeep
+output/*
+!output/.gitkeep
+submissions/*
+!submissions/README.md
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

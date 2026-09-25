@@ -1,0 +1,14 @@
+# E001 Name Character TF-IDF Retrieval Config
+retrieval:
+  method: char_tfidf
+  analyzer: char_wb
+  ngram_min: 3
+  ngram_max: 5
+  min_df: 5
+  max_df: 0.05
+  max_features: null
+  dtype: float32
+  query_chunk_size: null  # No longer chunking in python
+  top_k: 20
+  n_threads: -1
+  threshold: 0.0

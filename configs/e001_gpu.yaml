@@ -1,0 +1,12 @@
+# E001-C GPU Character TF-IDF Probe Config
+retrieval:
+  method: gpu_char_tfidf
+  analyzer: char_wb
+  ngram_min: 3
+  ngram_max: 5
+  min_df: 1
+  max_df: 1.0
+  max_features: null
+  dtype: float32
+  top_k: 20
+  batch_size: 1000

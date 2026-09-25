@@ -1,0 +1,10 @@
+numpy
+pandas
+scikit-learn
+scipy
+pytest
+jupyter
+tqdm
+polars
+pyarrow
+pyyaml

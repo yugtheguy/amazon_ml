@@ -1,0 +1,17 @@
+# Fold and Processed Data Configuration
+
+folds:
+  version: "v1"
+  n_folds: 5
+  seed: 42
+  stratify_by:
+    - country
+    - match_bucket
+
+normalization:
+  version: "v001"
+
+processed_data:
+  version: "v001"
+  format: "parquet"
+  output_dir: "data/processed/v001"

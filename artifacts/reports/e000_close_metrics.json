@@ -1,0 +1,121 @@
+{
+  "volume": {
+    "total": 985928,
+    "S2": 531539,
+    "S3": 454389
+  },
+  "distributions": {
+    "overall": {
+      "mean": 0.44676391968356294,
+      "median": 0.0,
+      "p90": 1.0,
+      "p95": 2.0,
+      "p99": 2.0,
+      "max": 5.0,
+      "frac_0": 0.6180066258205809,
+      "frac_1": 0.3187177392276039,
+      "frac_gt_1": 0.0632756349518153,
+      "frac_gt_10": 0.0
+    },
+    "zero_match": {
+      "mean": 0.15937913296064002,
+      "median": 0.0,
+      "p90": 1.0,
+      "p95": 1.0,
+      "p99": 2.0,
+      "max": 2.0,
+      "frac_0": 0.8617653979407207,
+      "frac_1": 0.11709007115791865,
+      "frac_gt_1": 0.021144530901360682,
+      "frac_gt_10": 0.0
+    },
+    "single_match": {
+      "mean": 0.265506852304103,
+      "median": 0.0,
+      "p90": 1.0,
+      "p95": 1.0,
+      "p99": 2.0,
+      "max": 3.0,
+      "frac_0": 0.7578069269954766,
+      "frac_1": 0.21895482430742633,
+      "frac_gt_1": 0.02323824869709711,
+      "frac_gt_10": 0.0
+    },
+    "multi_match": {
+      "mean": 0.47578899999338226,
+      "median": 0.0,
+      "p90": 1.0,
+      "p95": 2.0,
+      "p99": 2.0,
+      "max": 5.0,
+      "frac_0": 0.594233301788775,
+      "frac_1": 0.3374191935826253,
+      "frac_gt_1": 0.06834750462859973,
+      "frac_gt_10": 0.0
+    }
+  },
+  "recall": {
+    "overall": 0.09320607224189993,
+    "S2": 0.10291397136521119,
+    "S3": 0.08411618897642587,
+    "US": 0.10756462456661779,
+    "India": 0.07172100006438238,
+    "SINGLE_MATCH": 0.11858304589742945,
+    "MULTI_MATCH": 0.09280392296635497
+  },
+  "coverage": {
+    "overall": 0.009534578565484115,
+    "US": 0.011618444520727161,
+    "India": 0.0064113249951729175,
+    "SINGLE_MATCH": 0.11858304589742945,
+    "MULTI_MATCH": 0.002919950295685692,
+    "S2-only": 0.05191254920330842,
+    "S3-only": 0.04197619423944364,
+    "BOTH": 0.0031170346280250468
+  },
+  "zero_noise": {
+    "num_zero_cands": 106210,
+    "num_gt_0_cands": 17037,
+    "mean_cands": 0.15937913296064002,
+    "p95_cands": 1.0,
+    "p99_cands": 2.0
+  },
+  "contributions": {
+    "exact_name_address_clean": {
+      "cand_pairs": 62952,
+      "unique_cands": 0,
+      "gt_recovered": 62952,
+      "unique_gt_rescued": 0
+    },
+    "exact_name_address_accent": {
+      "cand_pairs": 77092,
+      "unique_cands": 14139,
+      "gt_recovered": 77092,
+      "unique_gt_rescued": 14139
+    },
+    "exact_name_address_punct": {
+      "cand_pairs": 89371,
+      "unique_cands": 20838,
+      "gt_recovered": 89371,
+      "unique_gt_rescued": 20838
+    },
+    "unique_exact_name": {
+      "cand_pairs": 921716,
+      "unique_cands": 882417,
+      "gt_recovered": 647730,
+      "unique_gt_rescued": 608431
+    }
+  },
+  "overlap": {
+    "exactly_1": 917394,
+    "exactly_2": 5582,
+    "exactly_3": 29235,
+    "all_4": 33717
+  },
+  "cardinality": {
+    "test_source1_entities": 1732544,
+    "candidate_pairs_rows": 1732544,
+    "matching_results_rows": 1732544,
+    "equality": true
+  }
+}
