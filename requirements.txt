@@ -9,3 +9,4 @@ polars
 pyarrow
 pyyaml
 sparse_dot_topn
+rapidfuzz==3.14.6

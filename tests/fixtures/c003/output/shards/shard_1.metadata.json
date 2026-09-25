@@ -1,0 +1,10 @@
+{
+  "shard": "shard_1",
+  "schema_version": "v1",
+  "config_hash": "b6010b526d9e9cc5feb127b5182f0292",
+  "c002_fingerprint": "1539b4af74c09d053ebfaf9c5018eb0ed41482c53a73eb96d8ebdbf8b8db9583",
+  "input_rows": 3,
+  "output_rows": 3,
+  "positive_rows": 2,
+  "elapsed_s": 0.04
+}

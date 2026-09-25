@@ -1,0 +1,130 @@
+{
+  "schema_version": "v1",
+  "description": "C002 Canonical Labeled Candidate-Pair Dataset",
+  "composite_key": [
+    "entity_id_s1",
+    "candidate_source",
+    "entity_id_cand"
+  ],
+  "source_aware_identity": true,
+  "valid_candidate_sources": [
+    "S2",
+    "S3"
+  ],
+  "label_definition": "label=1 iff (candidate_source, entity_id_cand) is in official GT for entity_id_s1. Source: train_ground_truth.tsv ONLY. No heuristics.",
+  "fold_semantics": "Fold is inherited from folds_v1.parquet via entity_id_s1. One S1 entity → exactly one fold. Never inferred from pairs.",
+  "column_categories": {
+    "A_identity": [
+      "entity_id_s1",
+      "candidate_source",
+      "entity_id_cand"
+    ],
+    "A_core_metadata": [
+      "country",
+      "fold"
+    ],
+    "A_provenance_optional": [
+      "retrieved_exact",
+      "retrieved_name_word",
+      "retrieved_address_word",
+      "retrieved_rare",
+      "retrieved_numeric",
+      "exact_name_address_clean",
+      "exact_name_address_accent",
+      "exact_name_address_punct",
+      "unique_exact_name",
+      "name_word_score",
+      "name_word_rank",
+      "address_word_score",
+      "address_word_rank",
+      "rare_token_overlap_count",
+      "rarest_shared_token_df",
+      "shared_numeric_count",
+      "numeric_conflict",
+      "retrieval_channel_count",
+      "is_exact",
+      "best_lexical_rank",
+      "both_name_address"
+    ],
+    "B_target": [
+      "label"
+    ],
+    "C_diagnostic_training_only": {
+      "columns": [
+        "gt_match_count",
+        "retrieved_positive_count",
+        "missing_positive_count"
+      ],
+      "marker": "TRAINING_DIAGNOSTIC_ONLY",
+      "warning": "These columns are GT-derived. Never use as model features."
+    }
+  },
+  "dtypes": {
+    "entity_id_s1": "str",
+    "candidate_source": "category",
+    "entity_id_cand": "str",
+    "country": "category",
+    "fold": "int8",
+    "label": "int8",
+    "retrieved_exact": "int8",
+    "retrieved_name_word": "int8",
+    "retrieved_address_word": "int8",
+    "retrieved_rare": "int8",
+    "retrieved_numeric": "int8",
+    "exact_name_address_clean": "int8",
+    "exact_name_address_accent": "int8",
+    "exact_name_address_punct": "int8",
+    "unique_exact_name": "int8",
+    "is_exact": "int8",
+    "both_name_address": "int8",
+    "numeric_conflict": "int8",
+    "name_word_score": "float32",
+    "name_word_rank": "int16",
+    "address_word_score": "float32",
+    "address_word_rank": "int16",
+    "rare_token_overlap_count": "int16",
+    "rarest_shared_token_df": "int32",
+    "shared_numeric_count": "int16",
+    "retrieval_channel_count": "int8",
+    "best_lexical_rank": "int16",
+    "gt_match_count": "int16",
+    "retrieved_positive_count": "int16",
+    "missing_positive_count": "int16"
+  },
+  "nullable_columns": [
+    "retrieved_exact",
+    "retrieved_name_word",
+    "retrieved_address_word",
+    "retrieved_rare",
+    "retrieved_numeric",
+    "exact_name_address_clean",
+    "exact_name_address_accent",
+    "exact_name_address_punct",
+    "unique_exact_name",
+    "name_word_score",
+    "name_word_rank",
+    "address_word_score",
+    "address_word_rank",
+    "rare_token_overlap_count",
+    "rarest_shared_token_df",
+    "shared_numeric_count",
+    "numeric_conflict",
+    "retrieval_channel_count",
+    "is_exact",
+    "best_lexical_rank",
+    "both_name_address",
+    "gt_match_count",
+    "retrieved_positive_count",
+    "missing_positive_count"
+  ],
+  "invariants": [
+    "No duplicate composite key (entity_id_s1, candidate_source, entity_id_cand)",
+    "No null entity_id_s1 or entity_id_cand",
+    "candidate_source in {S2, S3}",
+    "label in {0, 1}",
+    "Every entity_id_s1 has exactly one fold",
+    "No retrieval-miss injection — candidates only from C001",
+    "Candidate count unchanged from C001 final after valid integrity filtering"
+  ],
+  "input_candidate_schema_version": "C001_R001_v1"
+}

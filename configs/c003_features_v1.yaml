@@ -1,0 +1,32 @@
+# C003 Feature Dataset V1 — Configuration
+
+# ---------------------------------------------------------------------------
+# Experiment Identity
+# ---------------------------------------------------------------------------
+experiment_id: "C003"
+parent_experiment: "C002"
+schema_version: "v1"
+
+# ---------------------------------------------------------------------------
+# Input Paths  (override on Kaggle)
+# ---------------------------------------------------------------------------
+c002_pair_dataset_dir: "artifacts/datasets/C002/pair_dataset_v1/shards"
+
+# Normalized Source Text (for fast vectorized joins)
+processed_s1_path: "artifacts/datasets/normalized/train_source1.parquet"
+processed_s2_path: "artifacts/datasets/normalized/train_source2.parquet"
+processed_s3_path: "artifacts/datasets/normalized/train_source3.parquet"
+
+# ---------------------------------------------------------------------------
+# Output Path
+# ---------------------------------------------------------------------------
+output_dir: "artifacts/features/C003/feature_dataset_v1"
+
+# ---------------------------------------------------------------------------
+# Feature Settings
+# ---------------------------------------------------------------------------
+# All explicit model features are hardcoded in schema.py.
+# Missing behavior:
+# - Similarity missing text -> NaN
+# - Counts/Lengths missing text -> 0
+# - Relative Ranks missing text -> Bottom rank / NaN

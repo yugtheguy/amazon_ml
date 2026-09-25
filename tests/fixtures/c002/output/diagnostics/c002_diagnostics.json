@@ -1,0 +1,21 @@
+{
+  "total_s1_entities": 2,
+  "input_candidate_rows": 3,
+  "output_pair_rows": 3,
+  "positive_rows": 2,
+  "negative_rows": 1,
+  "positive_rate": 0.666667,
+  "match_bucket_distribution": {
+    "MULTI_MATCH": 1,
+    "SINGLE_MATCH": 1
+  },
+  "fold_distribution": {
+    "1": 2
+  },
+  "country_distribution": {},
+  "s1_with_retrieved_positive": 1,
+  "s1_total_gt_pairs": 3,
+  "s1_retrieved_gt_pairs": 2,
+  "s1_missing_gt_pairs": 1,
+  "retrieval_miss_rate": 0.333333
+}

@@ -1,0 +1,14 @@
+{
+  "shard": "shard_1",
+  "schema_version": "v1",
+  "config_hash": "dccff3bbfbb4e1932a0ac93d79c13f77",
+  "input_fingerprint": "13d0d4f14effd727ade0306385a67c2a785e214b06efd240bbe35f8afc45802d",
+  "gt_fingerprint": "bd743beaf2f83572787c84634fc2cfc811cee730b0176a2b9f0e5fb12d63ad5a",
+  "fold_sha256": "11087851b7f68885f9dc124fd886ffa32092b2ea6ecf7c8431d135bdeeda022f",
+  "input_rows": 3,
+  "output_rows": 3,
+  "positive_rows": 2,
+  "negative_rows": 1,
+  "elapsed_s": 0.03,
+  "completed_at": "2026-09-25T22:27:06.062266+00:00"
+}
