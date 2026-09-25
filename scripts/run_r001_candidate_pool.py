@@ -108,6 +108,20 @@ def run_experiment(args):
         smoke_ids_df = pd.read_csv(args.smoke_ids_file)
         s1_sample_ids = smoke_ids_df['entity_id_s1'].values
     else:
+        if not os.path.exists(args.folds_file):
+            logging.warning(f"[R001] Folds file not found at {args.folds_file}. Building on the fly...")
+            from src.business_entity_resolution.data.folds import build_fold_manifest
+            os.makedirs(os.path.dirname(args.folds_file), exist_ok=True)
+            _ = build_fold_manifest(
+                source1_path=os.path.join(data_dir, "raw", "train", "train_source1.tsv"),
+                ground_truth_path=os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"),
+                n_folds=5,
+                seed=42,
+                version="v1",
+                output_dir=os.path.dirname(args.folds_file)
+            )
+            logging.info(f"[R001] Built folds successfully at {args.folds_file}")
+
         logging.info("[R001] Loading folds file for random sampling...")
         folds = pd.read_parquet(args.folds_file)
         s1_sample_ids = safe_sample_s1(folds, n_samples=n_samples)
