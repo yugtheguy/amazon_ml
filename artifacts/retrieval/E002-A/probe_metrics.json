@@ -1,0 +1,86 @@
+{
+  "S2": {
+    "1": {
+      "pair_recall": 0.25256009357171844,
+      "full_coverage": 0.14962983400009197,
+      "mean_candidates": 0.99996,
+      "unique_gt_rescued": 21161,
+      "extra_candidates": 49998,
+      "rescue_efficiency": 0.4232369294771791
+    },
+    "3": {
+      "pair_recall": 0.4423053970830449,
+      "full_coverage": 0.30123695222329516,
+      "mean_candidates": 2.99918,
+      "unique_gt_rescued": 37059,
+      "extra_candidates": 149959,
+      "rescue_efficiency": 0.24712754819650704
+    },
+    "5": {
+      "pair_recall": 0.49689685627670493,
+      "full_coverage": 0.3525313836391226,
+      "mean_candidates": 4.99774,
+      "unique_gt_rescued": 41633,
+      "extra_candidates": 249887,
+      "rescue_efficiency": 0.16660730650253916
+    },
+    "10": {
+      "pair_recall": 0.5519060463561931,
+      "full_coverage": 0.4049983905826091,
+      "mean_candidates": 9.9931,
+      "unique_gt_rescued": 46242,
+      "extra_candidates": 499655,
+      "rescue_efficiency": 0.0925478580220352
+    },
+    "20": {
+      "pair_recall": 0.5977370921156279,
+      "full_coverage": 0.4506368694532579,
+      "mean_candidates": 19.9829,
+      "unique_gt_rescued": 50082,
+      "extra_candidates": 999145,
+      "rescue_efficiency": 0.05012485675252341
+    }
+  },
+  "S3": {
+    "1": {
+      "pair_recall": 0.24377394098021815,
+      "full_coverage": 0.13474514452448255,
+      "mean_candidates": 0.99996,
+      "unique_gt_rescued": 21701,
+      "extra_candidates": 49998,
+      "rescue_efficiency": 0.43403736149445976
+    },
+    "3": {
+      "pair_recall": 0.4345603846283461,
+      "full_coverage": 0.2826433846995532,
+      "mean_candidates": 2.9993,
+      "unique_gt_rescued": 38685,
+      "extra_candidates": 149965,
+      "rescue_efficiency": 0.25796019071116594
+    },
+    "5": {
+      "pair_recall": 0.4925916356814684,
+      "full_coverage": 0.3361903893498678,
+      "mean_candidates": 4.99794,
+      "unique_gt_rescued": 43851,
+      "extra_candidates": 249897,
+      "rescue_efficiency": 0.17547629623404842
+    },
+    "10": {
+      "pair_recall": 0.5515777176171914,
+      "full_coverage": 0.3932935169143795,
+      "mean_candidates": 9.99358,
+      "unique_gt_rescued": 49102,
+      "extra_candidates": 499679,
+      "rescue_efficiency": 0.09826708747015583
+    },
+    "20": {
+      "pair_recall": 0.6005099920243538,
+      "full_coverage": 0.4408680587216194,
+      "mean_candidates": 19.98324,
+      "unique_gt_rescued": 53458,
+      "extra_candidates": 999162,
+      "rescue_efficiency": 0.053502835376045124
+    }
+  }
+}

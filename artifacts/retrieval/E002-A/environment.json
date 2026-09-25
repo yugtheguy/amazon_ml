@@ -1,0 +1,8 @@
+{
+  "os": "Linux-6.12.90+-x86_64-with-glibc2.35",
+  "python": "3.12.13 (main, Mar 4 2026, 09:23:07) [GCC 11.4.0]",
+  "nvidia-smi": "Tesla T4, 15360 MiB, 14807 MiB, 580.159.04, P0\nTesla T4, 15360 MiB, 14807 MiB, 580.159.04, P0",
+  "cuml": "26.02.000",
+  "cupy": "14.0.1",
+  "cudf": "26.02.01"
+}

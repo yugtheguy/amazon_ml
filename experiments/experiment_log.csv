@@ -5,3 +5,4 @@ E001-A,,,,,char_tfidf,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_CPU,CPU SciPy sparse 
 E001-B,,,,,char_tfidf_sparse_dot,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_CPU_OPTIMIZED,C++ sparse_dot_topn char tfidf,,
 E001-C,,4b7f928,configs/e001_gpu.yaml,,char_tfidf_gpu,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_GPU_OOM,GPU CuPy cuML char tfidf,,
 E001-CLOSE,,,,,,,,,,,,,,,,,,,,,E001_GLOBAL_NAME_CHAR_TFIDF = REJECTED_AS_GLOBAL_RETRIEVAL_CHANNEL,Global full-corpus Character TF-IDF retrieval is operationally unsuitable (dense intersection OOM),,
+E002-A,2026-09-25T13:00:00Z,bf4595b,configs/e002_word_gpu.yaml,v001,,word_tfidf_gpu,,,folds_v1,42.0,,20.0,,0.60,,,,,,425.2,SUCCESSFUL_GPU_PROBE,GPU Word TF-IDF bigrams top 20 candidate retrieval probe,candidate_generation,,
