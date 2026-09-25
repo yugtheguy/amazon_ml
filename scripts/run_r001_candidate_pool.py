@@ -112,6 +112,18 @@ def run_experiment(args):
             logging.warning(f"[R001] Folds file not found at {args.folds_file}. Building on the fly...")
             from src.business_entity_resolution.data.folds import build_fold_manifest
             os.makedirs(os.path.dirname(args.folds_file), exist_ok=True)
+            raw_train_dir = os.path.join(data_dir, "raw", "train")
+            if not os.path.exists(os.path.join(raw_train_dir, "train_source1.tsv")):
+                logging.warning("[R001] Raw data missing. Trying to symlink from /kaggle/input...")
+                for root, dirs, files in os.walk("/kaggle/input"):
+                    if "train_source1.tsv" in files and "train" in root:
+                        kaggle_train = root
+                        os.makedirs(raw_train_dir, exist_ok=True)
+                        for f in os.listdir(kaggle_train):
+                            if not os.path.exists(os.path.join(raw_train_dir, f)):
+                                os.symlink(os.path.join(kaggle_train, f), os.path.join(raw_train_dir, f))
+                        break
+
             _ = build_fold_manifest(
                 source1_path=os.path.join(data_dir, "raw", "train", "train_source1.tsv"),
                 ground_truth_path=os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"),
