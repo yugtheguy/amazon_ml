@@ -1,0 +1,5 @@
+{
+  "total_gt_pairs": 172807,
+  "type_a_retrieval_misses": 20869,
+  "type_b_pruning_misses": 6229
+}

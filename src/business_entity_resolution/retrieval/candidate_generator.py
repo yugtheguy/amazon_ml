@@ -380,26 +380,29 @@ class CandidateGenerator:
             (df['exact_name_address_punct'] == 1)
         ).astype(int)
         
+        df['best_lexical_rank'] = df[['name_word_rank', 'address_word_rank']].min(axis=1)
+        df['both_name_address'] = ((df['retrieved_name_word'] == 1) & (df['retrieved_address_word'] == 1)).astype(int)
+        
         # We sort by:
         # 1. is_exact (descending)
         # 2. retrieval_channel_count (descending)
-        # 3. name_word_score (descending)
-        # 4. address_word_score (descending)
+        # 3. both_name_address (descending)
+        # 4. best_lexical_rank (ascending)
         # 5. rare_token_overlap_count (descending)
         # 6. shared_numeric_count (descending)
-        # 7. name_word_rank (ascending)
+        # 7. entity_id_cand (ascending tie breaker)
         
         df.sort_values(
             by=[
                 'is_exact', 
                 'retrieval_channel_count', 
-                'name_word_score', 
-                'address_word_score',
+                'both_name_address',
+                'best_lexical_rank',
                 'rare_token_overlap_count',
                 'shared_numeric_count',
-                'name_word_rank'
+                'entity_id_cand'
             ],
-            ascending=[False, False, False, False, False, False, True],
+            ascending=[False, False, False, True, False, False, True],
             inplace=True
         )
         
