@@ -87,18 +87,25 @@ def run_experiment(args):
         yaml.dump(config, f)
         
     data_dir = args.data_dir
+    processed_dir = args.processed_dir if args.processed_dir else os.path.join(data_dir, "processed", "v001")
     
     logging.info("[R001] Data loading            START")
     t_dl = time.time()
-    s1 = pd.read_parquet(os.path.join(data_dir, "processed", "v001", "train_source1.parquet"))
-    s2 = pd.read_parquet(os.path.join(data_dir, "processed", "v001", "train_source2.parquet"))
-    s3 = pd.read_parquet(os.path.join(data_dir, "processed", "v001", "train_source3.parquet"))
+    s1 = pd.read_parquet(os.path.join(processed_dir, "train_source1.parquet"))
+    s2 = pd.read_parquet(os.path.join(processed_dir, "train_source2.parquet"))
+    s3 = pd.read_parquet(os.path.join(processed_dir, "train_source3.parquet"))
     gt = pd.read_csv(os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
     folds = pd.read_parquet("artifacts/folds/folds_v1.parquet")
     logging.info(f"[R001] Data loading            DONE  {time.time() - t_dl:.1f}s")
     
     n_samples = args.probe_size if args.probe_size > 0 else args.smoke_size
-    s1_sample_ids = safe_sample_s1(folds, n_samples=n_samples)
+    if args.smoke_ids_file and os.path.exists(args.smoke_ids_file):
+        logging.info(f"[R001] Loading deterministic smoke IDs from {args.smoke_ids_file}")
+        smoke_ids_df = pd.read_csv(args.smoke_ids_file)
+        s1_sample_ids = smoke_ids_df['entity_id_s1'].values
+    else:
+        s1_sample_ids = safe_sample_s1(folds, n_samples=n_samples)
+        
     s1_sample = s1[s1['entity_id'].isin(s1_sample_ids)].copy()
     
     logging.info("[R001] GT filtering            START")
@@ -187,8 +194,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='configs/candidate_pool_v1.yaml')
     parser.add_argument('--data-dir', type=str, default='data')
+    parser.add_argument('--processed-dir', type=str, default=None)
     parser.add_argument('--out-dir', type=str, default='artifacts/candidate_pool/R001/probe_50k')
     parser.add_argument('--smoke-size', type=int, default=0)
+    parser.add_argument('--smoke-ids-file', type=str, default='artifacts/candidate_pool/R001/smoke_1k/smoke_1k_ids.csv')
     parser.add_argument('--probe-size', type=int, default=50000)
     args = parser.parse_args()
     

@@ -204,7 +204,7 @@ notebook = {
    "outputs": [],
    "source": [
     "ARTIFACT_ROOT = \"/kaggle/working/artifacts/candidate_pool/R001\"\n",
-    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --data-dir data --smoke-size 1000 --probe-size 0 --out-dir /kaggle/working/artifacts/candidate_pool/R001/smoke_1k\n"
+    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --data-dir data --processed-dir /kaggle/input/datasets/yugdeshmukh/amazon-ml-processed-v001 --smoke-size 1000 --probe-size 0 --out-dir /kaggle/working/artifacts/candidate_pool/R001/smoke_1k\n"
    ]
   },
   {
@@ -239,7 +239,7 @@ notebook = {
    "metadata": {},
    "outputs": [],
    "source": [
-    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --smoke-size 0 --probe-size 50000 --out-dir /kaggle/working/artifacts/candidate_pool/R001/probe_50k\n"
+    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --data-dir data --processed-dir /kaggle/input/datasets/yugdeshmukh/amazon-ml-processed-v001 --smoke-size 0 --probe-size 50000 --out-dir /kaggle/working/artifacts/candidate_pool/R001/probe_50k\n"
    ]
   },
   {
