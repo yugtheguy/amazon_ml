@@ -7,7 +7,7 @@ import hashlib
 import logging
 import subprocess
 import tarfile
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 import numpy as np
 import pandas as pd
@@ -240,7 +240,7 @@ def run_experiment(args):
             "internal_cands": len(union_df),
             "final_cands": len(final_df),
             "config_hash": config_hash,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
             "elapsed_s": time.time() - t0
         }
         mark_shard_done(final_dir, shard_name, meta)
@@ -265,7 +265,12 @@ def run_experiment(args):
     
     # Entity Manifest
     cand_counts = final_candidates_df.groupby('entity_id_s1').size().reset_index(name='candidate_count')
-    manifest_df = s1[['entity_id', 'country', 'fold']].rename(columns={'entity_id': 'entity_id_s1'})
+    
+    manifest_cols = ['entity_id', 'country']
+    if 'fold' in s1.columns:
+        manifest_cols.append('fold')
+    manifest_df = s1[manifest_cols].rename(columns={'entity_id': 'entity_id_s1'})
+    
     manifest_df = manifest_df.merge(cand_counts, on='entity_id_s1', how='left')
     manifest_df['candidate_count'] = manifest_df['candidate_count'].fillna(0).astype(int)
     manifest_df['has_candidates'] = (manifest_df['candidate_count'] > 0).astype(int)
@@ -295,7 +300,7 @@ def run_experiment(args):
         "candidate_budget": max_cands,
         "config_hash": config_hash,
         "git_commit": git_commit,
-        "completed_at": datetime.utcnow().isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
         "input_s1_rows": len(s1),
         "output_final_cands": len(final_candidates_df),
         "validation_status": "PASSED"
@@ -308,7 +313,7 @@ def run_experiment(args):
         "logical_name": "CANDIDATE_POOL_V1",
         "version": "1.0",
         "path": "artifacts/candidate_pool/C001/candidate_pool_v1/package/train_candidates_v1.parquet",
-        "created_at": datetime.utcnow().isoformat(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "config_hash": config_hash,
         "git_commit": git_commit,
         "status": "FROZEN"
