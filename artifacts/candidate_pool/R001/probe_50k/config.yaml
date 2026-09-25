@@ -1,0 +1,36 @@
+address_word:
+  analyzer: word
+  enabled: true
+  max_df: 1.0
+  max_features: null
+  min_df: 1
+  ngram_max: 2
+  ngram_min: 1
+  norm: l2
+  sublinear_tf: true
+  top_k_per_source: 5
+name_word:
+  analyzer: word
+  enabled: true
+  max_df: 1.0
+  max_features: null
+  min_df: 1
+  ngram_max: 2
+  ngram_min: 1
+  norm: l2
+  sublinear_tf: true
+  top_k_per_source: 5
+numeric:
+  enabled: true
+  max_df_threshold: 50
+pruning:
+  candidate_budgets:
+  - 3
+  - 5
+  - 8
+  - 10
+  - 15
+rare_token:
+  enabled: true
+  max_df_threshold: 10
+  max_tokens_per_s1: 3
