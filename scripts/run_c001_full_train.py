@@ -156,6 +156,9 @@ def run_worker(args):
     final_dir = os.path.join(run_dir, "final")
     metrics_dir = os.path.join(run_dir, "metrics")
     
+    for d in [internal_dir, final_dir, metrics_dir]:
+        os.makedirs(d, exist_ok=True)
+    
     # 4. DO NOT KEEP GT/FOLDS DURING RETRIEVAL
     # Load only GT for the active S1
     gt = pd.read_csv(os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
