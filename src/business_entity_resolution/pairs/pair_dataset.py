@@ -289,12 +289,6 @@ def process_shard(
     # --- Label assignment (GT only) ---
     df[LABEL_COLUMN] = assign_labels(df, gt_dict)
 
-    # --- Add final_candidate_rank if not already present ---
-    if "final_candidate_rank" not in df.columns:
-        df["final_candidate_rank"] = (
-            df.groupby("entity_id_s1").cumcount() + 1
-        ).astype("int16")
-
     # --- Attach diagnostics (Category C) ---
     if include_diagnostics:
         df = attach_s1_diagnostics(df, gt_dict)

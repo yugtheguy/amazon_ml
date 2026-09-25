@@ -76,7 +76,6 @@ PROVENANCE_COLUMNS: List[str] = [
     "is_exact",
     "best_lexical_rank",
     "both_name_address",
-    "final_candidate_rank",   # position within S1 after pruning (1-indexed)
 ]
 
 # Provenance columns that may be absent in a given C001 version
@@ -140,7 +139,6 @@ DTYPE_MAP: Dict[str, str] = {
     "shared_numeric_count": "int16",
     "retrieval_channel_count": "int8",
     "best_lexical_rank": "int16",
-    "final_candidate_rank": "int16",
     # Diagnostics
     "gt_match_count": "int16",
     "retrieved_positive_count": "int16",
