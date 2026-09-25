@@ -126,10 +126,15 @@ notebook = {
     "else:\n",
     "    print(\"Processed data not found. Checking Kaggle attached datasets...\")\n",
     "    PROCESSED_DATA_ROOT = None\n",
-    "    for root, dirs, files in os.walk(\"/kaggle/input\"):\n",
-    "        if \"train_source1.parquet\" in files:\n",
-    "            PROCESSED_DATA_ROOT = root\n",
-    "            break\n",
+    "    # Explicit check for the user's known path first\n",
+    "    known_path = \"/kaggle/input/datasets/yugdeshmukh/amazon-ml-processed-v001\"\n",
+    "    if os.path.exists(os.path.join(known_path, \"train_source1.parquet\")):\n",
+    "        PROCESSED_DATA_ROOT = known_path\n",
+    "    else:\n",
+    "        for root, dirs, files in os.walk(\"/kaggle/input\"):\n",
+    "            if \"train_source1.parquet\" in files:\n",
+    "                PROCESSED_DATA_ROOT = root\n",
+    "                break\n",
     "    \n",
     "    if PROCESSED_DATA_ROOT:\n",
     "        print(f\"Found attached processed dataset at {PROCESSED_DATA_ROOT}\")\n",
@@ -162,7 +167,7 @@ notebook = {
    "outputs": [],
    "source": [
     "!pip install -r requirements.txt -q\n",
-    "!PYTHONPATH=. ALLOW_CPU_TFIDF=1 python -m pytest tests/ -q\n"
+    "!PYTHONPATH=. python -m pytest tests/ -q\n"
    ]
   },
   {
@@ -199,7 +204,7 @@ notebook = {
    "outputs": [],
    "source": [
     "ARTIFACT_ROOT = \"/kaggle/working/artifacts/candidate_pool/R001\"\n",
-    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --smoke-size 1000 --probe-size 0 --out-dir /kaggle/working/artifacts/candidate_pool/R001/smoke\n"
+    "!PYTHONPATH=. python -u scripts/run_r001_candidate_pool.py --data-dir data --smoke-size 1000 --probe-size 0 --out-dir /kaggle/working/artifacts/candidate_pool/R001/smoke_1k\n"
    ]
   },
   {
@@ -215,8 +220,8 @@ notebook = {
    "metadata": {},
    "outputs": [],
    "source": [
-    "if os.path.exists(\"/kaggle/working/artifacts/candidate_pool/R001/smoke/retrieval_metrics.json\"):\n",
-    "    with open(\"/kaggle/working/artifacts/candidate_pool/R001/smoke/retrieval_metrics.json\") as f:\n",
+    "if os.path.exists(\"/kaggle/working/artifacts/candidate_pool/R001/smoke_1k/retrieval_metrics.json\"):\n",
+    "    with open(\"/kaggle/working/artifacts/candidate_pool/R001/smoke_1k/retrieval_metrics.json\") as f:\n",
     "        print(json.dumps(json.load(f), indent=2))\n"
    ]
   },
@@ -308,8 +313,8 @@ notebook = {
    "outputs": [],
    "source": [
     "import shutil\n",
-    "shutil.make_archive(\"/kaggle/working/R001_artifacts\", 'zip', \"/kaggle/working/artifacts/candidate_pool/R001\")\n",
-    "print(\"Artifacts packaged to /kaggle/working/R001_artifacts.zip\")\n"
+    "shutil.make_archive(\"/kaggle/working/R001_smoke_artifacts\", 'zip', \"/kaggle/working/artifacts/candidate_pool/R001/smoke_1k\")\n",
+    "print(\"Artifacts packaged to /kaggle/working/R001_smoke_artifacts.zip\")\n"
    ]
   }
  ],
