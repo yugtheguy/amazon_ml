@@ -11,15 +11,25 @@ from datetime import datetime, timezone
 from collections import defaultdict
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
+import pyarrow as pa
 import yaml
 import psutil
 import gc
 
 from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
 
-def memory_usage():
+def memory_usage_gb():
     process = psutil.Process(os.getpid())
-    return process.memory_info().rss / (1024 * 1024)
+    return process.memory_info().rss / (1024**3)
+
+def gpu_usage_gb():
+    try:
+        import cupy as cp
+        pool = cp.get_default_memory_pool()
+        return pool.used_bytes() / (1024**3)
+    except Exception:
+        return 0.0
 
 def check_gpu():
     try:
@@ -35,21 +45,17 @@ def compute_config_hash(config):
 
 def get_git_commit():
     try:
-        commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
-        return commit
+        return subprocess.check_output(['git', 'rev-parse', 'HEAD']).strip().decode('utf-8')
     except Exception:
         return "unknown"
 
 def check_shard_done(final_dir, shard_name):
-    done_file = os.path.join(final_dir, f"{shard_name}.done")
-    return os.path.exists(done_file)
+    return os.path.exists(os.path.join(final_dir, f"{shard_name}.done"))
 
 def mark_shard_done(final_dir, shard_name, metadata):
-    metadata_file = os.path.join(final_dir, f"{shard_name}.metadata.json")
-    with open(metadata_file, "w") as f:
+    with open(os.path.join(final_dir, f"{shard_name}.metadata.json"), "w") as f:
         json.dump(metadata, f, indent=4)
-    done_file = os.path.join(final_dir, f"{shard_name}.done")
-    with open(done_file, "w") as f:
+    with open(os.path.join(final_dir, f"{shard_name}.done"), "w") as f:
         f.write("DONE")
 
 def atomic_write_parquet(df, filepath):
@@ -58,34 +64,25 @@ def atomic_write_parquet(df, filepath):
     os.rename(tmp_path, filepath)
 
 def validate_shard(s1_chunk, final_df, gt_dict, union_df, max_candidates=15):
-    # Invariant A, B, C conceptually covered by joins, but let's check basic things
     if not final_df.empty:
-        # Candidate count per S1 <= 15
         counts = final_df.groupby('entity_id_s1').size()
         if (counts > max_candidates).any():
             raise ValueError("Candidate count exceeds max_candidates")
         
-        # Final subset of internal
         final_pairs = set(zip(final_df['entity_id_s1'], final_df['entity_id_cand']))
         internal_pairs = set(zip(union_df['entity_id_s1'], union_df['entity_id_cand']))
         if not final_pairs.issubset(internal_pairs):
             raise ValueError("Final candidates are not a subset of internal candidates")
             
-        # No duplicate relationship
         dups = final_df.duplicated(subset=['entity_id_s1', 'candidate_source', 'entity_id_cand'])
         if dups.any():
             raise ValueError("Duplicate relationships found in final candidates")
 
-def evaluate_pool(cands_df, gt_dict, s1_sample_ids):
-    cands_map = defaultdict(set)
-    for row in cands_df.itertuples(index=False):
-        cands_map[row.entity_id_s1].add(row.entity_id_cand)
-        
+def evaluate_pool(cands_map, gt_dict, s1_sample_ids):
     total_gt = 0
     gt_found = 0
     s1_with_gt = 0
     full_cov_count = 0
-    
     zero_cands = []
     
     for s1_id in s1_sample_ids:
@@ -121,119 +118,117 @@ def evaluate_pool(cands_df, gt_dict, s1_sample_ids):
         "zero_match_zero_cand_pct": zero_zero_pct
     }
 
-def run_experiment(args):
+def run_worker(args):
     logging.basicConfig(level=logging.INFO, format='%(message)s')
-    logging.info("=== C001 FULL TRAIN CANDIDATE POOL V1 ===")
+    country = args.country
+    logging.info(f"=== WORKER START: {country} ===")
     
-    if os.environ.get("ALLOW_CPU_TFIDF") != "1":
-        gpu_status = check_gpu()
-        if "CPU Only" in gpu_status:
-            raise RuntimeError("GPU_REQUIRED=TRUE. Stopping loudly. cuML/CuPy is not available.")
-            
-    with open(args.config, "r") as f:
-        config = yaml.safe_load(f)
-        
-    config_hash = compute_config_hash(config)
-    git_commit = get_git_commit()
+    # 2. COLUMN PROJECTION
+    required_cols = [
+        'entity_id', 'country', 'name_norm_clean', 'addr_norm_clean',
+        'name_norm_accent_fold', 'addr_norm_accent_fold', 'name_norm_punct',
+        'addr_norm_punct', 'addr_numeric_tokens'
+    ]
     
-    run_dir = os.path.join(args.out_dir, "C001", "candidate_pool_v1")
-    manifest_dir = os.path.join(run_dir, "manifest")
-    internal_dir = os.path.join(run_dir, "internal")
-    final_dir = os.path.join(run_dir, "final")
-    metrics_dir = os.path.join(run_dir, "metrics")
-    logs_dir = os.path.join(run_dir, "logs")
-    package_dir = os.path.join(run_dir, "package")
-    
-    for d in [manifest_dir, internal_dir, final_dir, metrics_dir, logs_dir, package_dir]:
-        os.makedirs(d, exist_ok=True)
-        
-    with open(os.path.join(run_dir, "config_snapshot.yaml"), "w") as f:
-        yaml.dump(config, f)
-        
-    data_dir = args.data_dir
     processed_dir = args.processed_dir
+    data_dir = args.data_dir
     
-    logging.info("[C001] Loading Processed Data START")
-    t_dl = time.time()
-    s1 = pd.read_parquet(os.path.join(processed_dir, "train_source1.parquet"))
-    s2 = pd.read_parquet(os.path.join(processed_dir, "train_source2.parquet"))
-    s3 = pd.read_parquet(os.path.join(processed_dir, "train_source3.parquet"))
-    gt = pd.read_csv(os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
+    # 3. FILTER AT READ TIME
+    s1 = pd.read_parquet(os.path.join(processed_dir, "train_source1.parquet"), columns=required_cols, filters=[('country', '==', country)])
+    s2 = pd.read_parquet(os.path.join(processed_dir, "train_source2.parquet"), columns=required_cols, filters=[('country', '==', country)])
+    s3 = pd.read_parquet(os.path.join(processed_dir, "train_source3.parquet"), columns=required_cols, filters=[('country', '==', country)])
     
     if args.smoke_size > 0:
+        # Just cut s1
         s1 = s1.head(args.smoke_size)
-    logging.info(f"[C001] Data Loaded in {time.time()-t_dl:.1f}s. S1 rows: {len(s1)}")
     
-    # Ground truth mapping
-    gt_dict = {
-        row.source1_entity_id: set(row.matched_entity_ids.split(',')) if row.matched_entity_ids else set()
-        for row in gt.itertuples(index=False)
-    }
+    logging.info(f"[{country}] S1:{len(s1)} S2:{len(s2)} S3:{len(s3)}")
+    
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+    config_hash = compute_config_hash(config)
     
     generator = CandidateGenerator(config)
     max_cands = config.get('pruning', {}).get('candidate_budgets', [15])[-1]
     
-    # Partition logic: Country + Shard
+    run_dir = os.path.join(args.out_dir, "C001", "candidate_pool_v1")
+    internal_dir = os.path.join(run_dir, "internal")
+    final_dir = os.path.join(run_dir, "final")
+    metrics_dir = os.path.join(run_dir, "metrics")
+    
+    # 4. DO NOT KEEP GT/FOLDS DURING RETRIEVAL
+    # Load only GT for the active S1
+    gt = pd.read_csv(os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
+    active_s1_ids = set(s1['entity_id'].values)
+    gt = gt[gt['source1_entity_id'].isin(active_s1_ids)]
+    gt_dict = {
+        row.source1_entity_id: set(row.matched_entity_ids.split(',')) if row.matched_entity_ids else set()
+        for row in gt.itertuples(index=False)
+    }
+    del gt
+    gc.collect()
+    
     chunk_size = args.chunk_size
-    s1_shards = []
-    for country in s1['country'].unique():
-        country_s1 = s1[s1['country'] == country].sort_values('entity_id').reset_index(drop=True)
-        num_chunks = (len(country_s1) + chunk_size - 1) // chunk_size
-        for i in range(num_chunks):
-            chunk = country_s1.iloc[i*chunk_size:(i+1)*chunk_size]
-            shard_name = f"{country}_shard_{i:03d}"
-            s1_shards.append((shard_name, chunk))
+    s1_sorted = s1.sort_values('entity_id').reset_index(drop=True)
+    num_chunks = (len(s1_sorted) + chunk_size - 1) // chunk_size
+    
+    # RAM WATCHDOG prep
+    rss_history = []
+    MIN_AVAILABLE_RAM_GB = 4.0
+    
+    for i in range(num_chunks):
+        shard_name = f"{country}_shard_{i:03d}"
+        
+        # 8. RAM WATCHDOG
+        avail_gb = psutil.virtual_memory().available / (1024**3)
+        rss_gb = memory_usage_gb()
+        gpu_gb = gpu_usage_gb()
+        logging.info(f"--- Processing {shard_name} | Shard {i+1}/{num_chunks} ---")
+        logging.info(f"WATCHDOG: RSS {rss_gb:.2f}GB | Avail {avail_gb:.2f}GB | GPU {gpu_gb:.2f}GB")
+        
+        if avail_gb < MIN_AVAILABLE_RAM_GB:
+            logging.error(f"CRITICAL: Available RAM ({avail_gb:.2f}GB) is below safety floor ({MIN_AVAILABLE_RAM_GB}GB). Gracefully exiting.")
+            sys.exit(2)
             
-    logging.info(f"Total partitions: {len(s1_shards)}")
-    
-    all_final_dfs = []
-    
-    for i, (shard_name, s1_chunk) in enumerate(s1_shards):
-        pct = (i / len(s1_shards)) * 100
-        logging.info(f"--- Processing {shard_name} | Shard {i+1}/{len(s1_shards)} ({pct:.1f}%) | Rows: {len(s1_chunk)} ---")
-        shard_misses_file = os.path.join(metrics_dir, f"{shard_name}_misses.parquet")
+        # 9. MEMORY-GROWTH DETECTOR
+        rss_history.append(rss_gb)
+        if len(rss_history) >= 3:
+            growth = rss_history[-1] - rss_history[-3]
+            if growth > 3.0: # Material growth of >3GB over 3 shards
+                logging.error(f"CRITICAL: Monotonic memory growth detected ({growth:.2f}GB). Halting to prevent crash.")
+                sys.exit(3)
         
         if check_shard_done(final_dir, shard_name):
             logging.info(f"Shard {shard_name} already DONE. Skipping.")
-            final_df = pd.read_parquet(os.path.join(final_dir, f"{shard_name}.parquet"))
-            all_final_dfs.append(final_df)
             continue
             
+        s1_chunk = s1_sorted.iloc[i*chunk_size:(i+1)*chunk_size]
         t0 = time.time()
+        
         union_df = generator.generate(s1_chunk, {'S2': s2, 'S3': s3})
         atomic_write_parquet(union_df, os.path.join(internal_dir, f"{shard_name}.parquet"))
         
         final_df = generator.rank_and_prune(union_df, max_candidates=max_cands)
-        
         validate_shard(s1_chunk, final_df, gt_dict, union_df, max_cands)
-        
         atomic_write_parquet(final_df, os.path.join(final_dir, f"{shard_name}.parquet"))
         
-        # Compute misses for this shard
+        # Misses
         chunk_missed_list = []
         final_pairs = set(zip(final_df['entity_id_s1'], final_df['entity_id_cand']))
         internal_pairs = set(zip(union_df['entity_id_s1'], union_df['entity_id_cand']))
-        
         for s1_id in s1_chunk['entity_id'].values:
             matches = gt_dict.get(s1_id, set())
             for m in matches:
                 if (s1_id, m) not in final_pairs:
                     is_internal = (s1_id, m) in internal_pairs
-                    miss_type = "pruning_miss" if is_internal else "retrieval_miss"
                     chunk_missed_list.append({
                         "source1_entity_id": s1_id,
                         "candidate_entity_id": m,
-                        "miss_type": miss_type
+                        "miss_type": "pruning_miss" if is_internal else "retrieval_miss"
                     })
-                    
-        misses_df = pd.DataFrame(chunk_missed_list)
-        if chunk_missed_list:
-            atomic_write_parquet(misses_df, shard_misses_file)
-        else:
-            # write empty df with right schema
-            empty_miss = pd.DataFrame(columns=["source1_entity_id", "candidate_entity_id", "miss_type"])
-            atomic_write_parquet(empty_miss, shard_misses_file)
-            
+        misses_df = pd.DataFrame(chunk_missed_list) if chunk_missed_list else pd.DataFrame(columns=["source1_entity_id", "candidate_entity_id", "miss_type"])
+        atomic_write_parquet(misses_df, os.path.join(metrics_dir, f"{shard_name}_misses.parquet"))
+        
         meta = {
             "shard": shard_name,
             "s1_rows": len(s1_chunk),
@@ -244,44 +239,140 @@ def run_experiment(args):
             "elapsed_s": time.time() - t0
         }
         mark_shard_done(final_dir, shard_name, meta)
-        all_final_dfs.append(final_df)
         
-        # Free memory
+        # 6. PER-SHARD MEMORY LIFECYCLE
+        del s1_chunk
         del union_df
-        del internal_pairs
+        del final_df
         del final_pairs
-        
-        logging.info(f"Shard {shard_name} completed in {time.time()-t0:.1f}s. Memory: {memory_usage():.1f} MB")
+        del internal_pairs
+        del misses_df
+        if 'cp' in sys.modules:
+            try:
+                import cupy as cp
+                cp.get_default_memory_pool().free_all_blocks()
+            except Exception:
+                pass
         gc.collect()
-
-    # Combine final
-    logging.info("Combining all final shards...")
-    if len(all_final_dfs) > 0:
-        final_candidates_df = pd.concat(all_final_dfs, ignore_index=True)
-    else:
-        final_candidates_df = pd.DataFrame()
+        logging.info(f"Shard {shard_name} completed in {time.time()-t0:.1f}s.")
         
-    final_candidates_df.to_parquet(os.path.join(package_dir, "train_candidates_v1.parquet"), index=False)
+    # 7. COUNTRY-BOUNDARY CLEANUP
+    # Release variables cleanly before exit
+    generator._tfidf_cache.clear()
+    del generator
+    del s1
+    del s2
+    del s3
+    gc.collect()
+    if 'cp' in sys.modules:
+        try:
+            import cupy as cp
+            cp.get_default_memory_pool().free_all_blocks()
+        except Exception:
+            pass
+    logging.info(f"=== WORKER END: {country} ===")
+
+def run_orchestrator(args):
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logging.info("=== C001 FULL TRAIN ORCHESTRATOR ===")
     
-    # Entity Manifest
-    cand_counts = final_candidates_df.groupby('entity_id_s1').size().reset_index(name='candidate_count')
+    if os.environ.get("ALLOW_CPU_TFIDF") != "1":
+        gpu_status = check_gpu()
+        if "CPU Only" in gpu_status:
+            raise RuntimeError("GPU_REQUIRED=TRUE. Stopping loudly. cuML/CuPy is not available.")
+            
+    processed_dir = args.processed_dir
     
-    # Strictly join FOLDS_V1
-    fold_path = os.path.join(args.out_dir, "..", "folds", "fold_manifest_v1.parquet")
-    fold_path = os.path.normpath(fold_path)
+    # Fast unique country fetch
+    s1_meta = pq.read_table(os.path.join(processed_dir, "train_source1.parquet"), columns=['country'])
+    countries = sorted(pd.Series(s1_meta['country']).unique())
+    del s1_meta
+    gc.collect()
+    
+    logging.info(f"Found {len(countries)} countries: {countries}")
+    
+    for country in countries:
+        logging.info(f"\n>>> Spawning worker for country: {country}")
+        cmd = [
+            sys.executable, "-u", __file__,
+            "--country", country,
+            "--config", args.config,
+            "--data-dir", args.data_dir,
+            "--processed-dir", args.processed_dir,
+            "--out-dir", args.out_dir,
+            "--smoke-size", str(args.smoke_size),
+            "--chunk-size", str(args.chunk_size)
+        ]
+        
+        env = os.environ.copy()
+        res = subprocess.run(cmd, env=env)
+        if res.returncode != 0:
+            logging.error(f"CRITICAL: Worker for {country} failed with code {res.returncode}. Halting orchestrator.")
+            sys.exit(res.returncode)
+            
+    logging.info("\n>>> ALL WORKERS FINISHED. Finalizing datasets...")
+    
+    run_dir = os.path.join(args.out_dir, "C001", "candidate_pool_v1")
+    final_dir = os.path.join(run_dir, "final")
+    metrics_dir = os.path.join(run_dir, "metrics")
+    manifest_dir = os.path.join(run_dir, "manifest")
+    package_dir = os.path.join(run_dir, "package")
+    
+    for d in [manifest_dir, package_dir]:
+        os.makedirs(d, exist_ok=True)
+        
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+    config_hash = compute_config_hash(config)
+    git_commit = get_git_commit()
+    max_cands = config.get('pruning', {}).get('candidate_budgets', [15])[-1]
+    
+    # 5. NO GLOBAL FINAL CONCAT
+    # Streaming candidate write
+    final_files = [os.path.join(final_dir, f) for f in os.listdir(final_dir) if f.endswith(".parquet") and "misses" not in f]
+    final_out_path = os.path.join(package_dir, "train_candidates_v1.parquet")
+    
+    cands_map = defaultdict(set)
+    writer = None
+    output_final_cands = 0
+    
+    for f in final_files:
+        df = pd.read_parquet(f)
+        if not df.empty:
+            output_final_cands += len(df)
+            for row in df.itertuples(index=False):
+                cands_map[row.entity_id_s1].add(row.entity_id_cand)
+            table = pa.Table.from_pandas(df)
+            if writer is None:
+                writer = pq.ParquetWriter(final_out_path, table.schema)
+            writer.write_table(table)
+        del df
+        gc.collect()
+        
+    if writer:
+        writer.close()
+    else:
+        # write empty
+        pd.DataFrame().to_parquet(final_out_path)
+        
+    # Process manifest stream
+    cand_counts = pd.DataFrame([
+        {'entity_id_s1': k, 'candidate_count': len(v)}
+        for k, v in cands_map.items()
+    ])
+    
+    fold_path = os.path.normpath(os.path.join(args.out_dir, "..", "folds", "fold_manifest_v1.parquet"))
     if not os.path.exists(fold_path):
         raise FileNotFoundError(f"CRITICAL: Frozen folds_v1.parquet not found at {fold_path}")
-        
-    folds_df = pd.read_parquet(fold_path)
-    if 'fold_id' not in folds_df.columns or 'entity_id' not in folds_df.columns:
-        raise ValueError("Frozen folds missing entity_id or fold_id")
-        
-    folds_df = folds_df[['entity_id', 'fold_id']]
-    # Verify no duplicates
+    folds_df = pd.read_parquet(fold_path)[['entity_id', 'fold_id']]
     if folds_df['entity_id'].duplicated().any():
         raise ValueError("Frozen folds contain duplicate entity_ids!")
         
-    manifest_df = s1[['entity_id', 'country']].rename(columns={'entity_id': 'entity_id_s1'})
+    s1_all = pd.read_parquet(os.path.join(processed_dir, "train_source1.parquet"), columns=['entity_id', 'country'])
+    if args.smoke_size > 0:
+        s1_all = s1_all.head(args.smoke_size)
+    
+    manifest_df = s1_all.rename(columns={'entity_id': 'entity_id_s1'})
     manifest_df = manifest_df.merge(folds_df.rename(columns={'entity_id': 'entity_id_s1', 'fold_id': 'fold'}), on='entity_id_s1', how='left')
     
     if manifest_df['fold'].isna().any():
@@ -292,24 +383,36 @@ def run_experiment(args):
     manifest_df['has_candidates'] = (manifest_df['candidate_count'] > 0).astype(int)
     manifest_df.to_parquet(os.path.join(package_dir, "train_candidate_entity_manifest_v1.parquet"), index=False)
     
-    # GT Miss Analysis
-    logging.info("Combining misses...")
-    all_misses = []
-    for shard_name, _ in s1_shards:
-        shard_misses_file = os.path.join(metrics_dir, f"{shard_name}_misses.parquet")
-        if os.path.exists(shard_misses_file):
-            all_misses.append(pd.read_parquet(shard_misses_file))
-            
-    if all_misses:
-        misses_concat = pd.concat(all_misses, ignore_index=True)
-        misses_concat.to_parquet(os.path.join(metrics_dir, "missed_gt_pairs_v1.parquet"), index=False)
+    # GT Miss Analysis stream
+    miss_files = [os.path.join(metrics_dir, f) for f in os.listdir(metrics_dir) if f.endswith("_misses.parquet")]
+    m_writer = None
+    for mf in miss_files:
+        df = pd.read_parquet(mf)
+        if not df.empty:
+            table = pa.Table.from_pandas(df)
+            if m_writer is None:
+                m_writer = pq.ParquetWriter(os.path.join(metrics_dir, "missed_gt_pairs_v1.parquet"), table.schema)
+            m_writer.write_table(table)
+        del df
+        gc.collect()
+    if m_writer:
+        m_writer.close()
+    else:
+        pd.DataFrame(columns=["source1_entity_id", "candidate_entity_id", "miss_type"]).to_parquet(os.path.join(metrics_dir, "missed_gt_pairs_v1.parquet"))
+        
+    # Evaluate
+    gt = pd.read_csv(os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
+    gt_dict = {
+        row.source1_entity_id: set(row.matched_entity_ids.split(',')) if row.matched_entity_ids else set()
+        for row in gt.itertuples(index=False)
+    }
+    del gt
+    gc.collect()
     
-    # Metrics Evaluation
-    eval_res = evaluate_pool(final_candidates_df, gt_dict, s1['entity_id'].values)
+    eval_res = evaluate_pool(cands_map, gt_dict, s1_all['entity_id'].values)
     with open(os.path.join(metrics_dir, "evaluation_metrics.json"), "w") as f:
         json.dump(eval_res, f, indent=4)
         
-    # Run Manifest
     run_manifest = {
         "experiment_id": "C001",
         "architecture": "R001",
@@ -317,14 +420,13 @@ def run_experiment(args):
         "config_hash": config_hash,
         "git_commit": git_commit,
         "completed_at": datetime.now(timezone.utc).isoformat(),
-        "input_s1_rows": len(s1),
-        "output_final_cands": len(final_candidates_df),
+        "input_s1_rows": len(s1_all),
+        "output_final_cands": output_final_cands,
         "validation_status": "PASSED"
     }
     with open(os.path.join(manifest_dir, "run_manifest.json"), "w") as f:
         json.dump(run_manifest, f, indent=4)
         
-    # Artifact Registry
     registry = {
         "logical_name": "CANDIDATE_POOL_V1",
         "version": "1.0",
@@ -337,19 +439,15 @@ def run_experiment(args):
     os.makedirs(os.path.join(args.out_dir, "registry"), exist_ok=True)
     with open(os.path.join(args.out_dir, "registry", "artifact_registry.json"), "w") as f:
         json.dump(registry, f, indent=4)
-        
     with open(os.path.join(run_dir, "candidate_pool_v1_FREEZE.json"), "w") as f:
         json.dump(registry, f, indent=4)
         
-    # Pack Bundle
     logging.info("Packaging final bundle...")
     bundle_name = os.path.join(run_dir, "candidate_pool_v1_bundle.tar.gz")
     with tarfile.open(bundle_name, "w:gz") as tar:
         tar.add(package_dir, arcname="package")
         tar.add(manifest_dir, arcname="manifest")
         tar.add(metrics_dir, arcname="metrics")
-        tar.add(os.path.join(run_dir, "config_snapshot.yaml"), arcname="config_snapshot.yaml")
-        tar.add(os.path.join(run_dir, "candidate_pool_v1_FREEZE.json"), arcname="candidate_pool_v1_FREEZE.json")
         
     logging.info("DONE. FROZEN.")
 
@@ -361,9 +459,13 @@ if __name__ == "__main__":
     parser.add_argument('--out-dir', type=str, default='artifacts/candidate_pool')
     parser.add_argument('--smoke-size', type=int, default=0)
     parser.add_argument('--chunk-size', type=int, default=50000)
+    parser.add_argument('--country', type=str, default=None)
     args = parser.parse_args()
     
     if args.processed_dir is None:
         args.processed_dir = os.path.join(args.data_dir, "processed", "v001")
         
-    run_experiment(args)
+    if args.country:
+        run_worker(args)
+    else:
+        run_orchestrator(args)
