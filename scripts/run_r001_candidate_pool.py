@@ -87,7 +87,14 @@ def run_experiment(args):
         yaml.dump(config, f)
         
     data_dir = args.data_dir
-    processed_dir = args.processed_dir if args.processed_dir else os.path.join(data_dir, "processed", "v001")
+    if args.processed_dir:
+        processed_dir = args.processed_dir
+    else:
+        known_kaggle_path = "/kaggle/input/datasets/yugdeshmukh/amazon-ml-processed-v001"
+        if os.path.exists(known_kaggle_path):
+            processed_dir = known_kaggle_path
+        else:
+            processed_dir = os.path.join(data_dir, "processed", "v001")
     
     logging.info("[R001] Data loading            START")
     t_dl = time.time()
