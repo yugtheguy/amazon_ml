@@ -1,4 +1,7 @@
 experiment_id,timestamp,git_commit,config_file,dataset_version,model,feature_set,blocking_strategy,negative_sampling_strategy,validation_split,random_seed,candidate_recall,avg_candidate_count,pair_precision,pair_recall,macro_f05,singleton_f05,non_singleton_f05,us_f05,india_f05,runtime,notes,description,architecture_stage,val_macro_f05,test_macro_f05
 P0,2026-09-25T13:42:00Z,UNCOMMITTED,configs/baseline.yaml,v001,,,,,folds_v1,42.0,,,,,,,,,,750.0,"Foundation implementation: fold manifest, normalization, processing, submission infra",,,,
 E000,,,,,,,,,,,,,,,,,,,,,"First baseline, conservative rule gating, exact deterministic channels",Exact deterministic retrieval + D1 conservative decision,retrieval_and_decision,0.09442553685477377,
-E001-C,name_norm_clean,char_tfidf_gpu,,IN_PROGRESS,Probe GPU viability of Character TF-IDF
+E001-A,,,,,char_tfidf,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_CPU,CPU SciPy sparse char tfidf,,
+E001-B,,,,,char_tfidf_sparse_dot,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_CPU_OPTIMIZED,C++ sparse_dot_topn char tfidf,,
+E001-C,,4b7f928,configs/e001_gpu.yaml,,char_tfidf_gpu,,,,,,,,,,,,,,,OPERATIONALLY_REJECTED_GPU_OOM,GPU CuPy cuML char tfidf,,
+E001-CLOSE,,,,,,,,,,,,,,,,,,,,,E001_GLOBAL_NAME_CHAR_TFIDF = REJECTED_AS_GLOBAL_RETRIEVAL_CHANNEL,Global full-corpus Character TF-IDF retrieval is operationally unsuitable (dense intersection OOM),,
