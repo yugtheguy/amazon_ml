@@ -172,6 +172,32 @@ notebook = {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
+    "## 5b. C001 Pre-Full-Run Audit"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": None,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# NOTE: Run this cell BEFORE cell 6 (full run).\n",
+    "# The smoke test must have passed. The shards must exist in /kaggle/working/artifacts/candidate_pool/C001\n",
+    "print(\"Running C001 pre-full-run audit...\")\n",
+    "audit_cmd = [\n",
+    "    sys.executable, \"-u\", \"scripts/audit_c001_smoke.py\",\n",
+    "    \"--candidate-pool-dir\", \"/kaggle/working/artifacts/candidate_pool/C001/candidate_pool_v1\",\n",
+    "    \"--fold-manifest\", FOLD_MANIFEST,\n",
+    "    \"--processed-dir\", PROCESSED_DATA_ROOT,\n",
+    "    \"--data-dir\", \"data\"\n",
+    "]\n",
+    "subprocess.run(audit_cmd, env={**os.environ, 'PYTHONPATH': '.'}, check=True)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
     "## 6. C001 FULL TRAINING RUN (2.2M Rows)"
    ]
   },
