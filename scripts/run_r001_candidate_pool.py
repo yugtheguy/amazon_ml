@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument('--probe-size', type=int, default=50000)
     args = parser.parse_args()
     
-    data_dir = os.environ.get("KAGGLE_DATA_ROOT", args.data_dir)
+    data_dir = args.data_dir
     out_dir = os.environ.get("KAGGLE_ARTIFACT_DIR", args.out_dir)
     args.data_dir = data_dir
     args.out_dir = out_dir
