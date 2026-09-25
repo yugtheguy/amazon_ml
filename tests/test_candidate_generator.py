@@ -46,4 +46,36 @@ def test_candidate_generator():
     
     pruned = gen.rank_and_prune(union_df, max_candidates=2)
     assert len(pruned) <= 6
+
+
+def test_gpu_batch_size():
+    from unittest.mock import patch, MagicMock
+    config = {
+        'name_word': {'enabled': True, 'top_k_per_source': 2, 'batch_size': 42},
+    }
+    
+    gen = CandidateGenerator(config)
+    
+    s1 = pd.DataFrame({'entity_id': ['s1'], 'country': ['US'], 'name_norm_clean': ['amazon']})
+    s2 = pd.DataFrame({'entity_id': ['s2'], 'country': ['US'], 'name_norm_clean': ['amazon']})
+    
+    # Since HAS_CUML might be False on test machine, we need to inject the mock directly
+    import src.business_entity_resolution.retrieval.candidate_generator as cg
+    mock_sp = MagicMock()
+    cg.sp_matmul_topn_cupy = mock_sp
+    
+    with patch("src.business_entity_resolution.retrieval.candidate_generator.HAS_CUML", True):
+        with patch("src.business_entity_resolution.retrieval.candidate_generator.TFIDF") as mock_vec:
+            mock_vec.return_value.fit_transform.return_value = MagicMock()
+            mock_vec.return_value.transform.return_value = MagicMock()
+                
+                try:
+                    gen._run_word_tfidf(s1, s2, "S2", "name_norm_clean", config['name_word'], "name_word")
+                except Exception:
+                    pass # Ignore downstream errors caused by mocking
+                    
+                mock_sp.assert_called_once()
+                _, kwargs = mock_sp.call_args
+                assert kwargs.get('batch_size') == 42
+
     

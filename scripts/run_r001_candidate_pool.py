@@ -140,6 +140,11 @@ def run_experiment(args):
         
     s1_sample = s1[s1['entity_id'].isin(s1_sample_ids)].copy()
     
+    print(f"Sampled S1: {len(s1_sample_ids)}")
+    if args.smoke_size > 0 and args.probe_size == 0 and len(s1_sample_ids) != args.smoke_size:
+        print(f"ERROR: Expected {args.smoke_size} samples but got {len(s1_sample_ids)}")
+        sys.exit(1)
+    
     logging.info("[R001] GT filtering            START")
     t_gt = time.time()
     sample_id_set = set(s1_sample_ids)

@@ -9,6 +9,7 @@ name_word:
   max_features: null
   min_df: 1
   max_df: 1.0
+  batch_size: 100
 
 address_word:
   enabled: true
@@ -21,6 +22,7 @@ address_word:
   max_features: null
   min_df: 1
   max_df: 1.0
+  batch_size: 100
 
 rare_token:
   enabled: true
