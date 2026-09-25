@@ -125,7 +125,8 @@ class CandidateGenerator:
                 if hasattr(X_query, 'get'):
                     X_query = X_query.get()
                 
-                top_sparse = sp_matmul_topn_cupy(X_query, X_target.T, top_k=top_k, batch_size=1000)
+                # Reduced batch_size to 200 to prevent CUDA OOM on Kaggle T4 (15GB) when vocabulary is unrestricted (max_df=1.0)
+                top_sparse = sp_matmul_topn_cupy(X_query, X_target.T, top_k=top_k, batch_size=200)
                 
                 # top_sparse is csr
                 s1_ids = c_s1['entity_id'].values
