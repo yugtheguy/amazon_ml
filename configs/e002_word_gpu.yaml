@@ -5,7 +5,7 @@ retrieval:
   
   # Probe settings
   sample_size: 50000
-  batch_size: 1000
+  batch_size: 100
   
   # K frontier
   top_k: 20
