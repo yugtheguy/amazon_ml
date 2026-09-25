@@ -14,36 +14,16 @@ To determine if global Name Character TF-IDF (E001) is operationally viable usin
 
 ## Execution Code
 
-In a single notebook cell, execute:
+Instead of copy-pasting code, a ready-to-run Jupyter Notebook is provided in this repository.
 
-```python
-import os
-import subprocess
-
-# 1. Clone the repository (Replace with your actual GitHub repository URL/token if private)
-REPO_URL = "https://github.com/yugtheguy/amazon_ml.git"
-if not os.path.exists("amazon_ml"):
-    subprocess.run(["git", "clone", REPO_URL], check=True)
-    
-os.chdir("amazon_ml")
-
-# 2. Set Environment Paths
-# Update KAGGLE_DATA_ROOT to match the attached dataset path (e.g. "/kaggle/input/amazon-ml-challenge-2026")
-os.environ["KAGGLE_DATA_ROOT"] = "/kaggle/input/amazon-ml-challenge-2026"
-os.environ["KAGGLE_ARTIFACT_DIR"] = "/kaggle/working/artifacts/retrieval/E001-C"
-
-# 3. Verify GPU Environment
-print("--- Verifying GPU Environment ---")
-subprocess.run(["python", "scripts/check_gpu_environment.py"])
-
-# 4. Run E001-C GPU Probe
-print("\n--- Running E001-C GPU Probe ---")
-# Make sure your Python path includes the current directory so modules are resolved
-subprocess.run(
-    ["python", "-u", "scripts/run_e001_gpu_probe.py", "--config", "configs/e001_gpu.yaml"],
-    env=dict(os.environ, PYTHONPATH=".")
-)
-```
+**Instructions:**
+1. Upload or open the `kaggle/E001_C_GPU_Probe.ipynb` notebook in your Kaggle workspace.
+2. The notebook acts as a thin execution layer. It will:
+   - Discover your environment and Kaggle dataset automatically.
+   - Run a smoke test before committing to the full 50k sample.
+   - Handle cloning the repository.
+   - Output artifacts and bundle them into a zip file.
+3. Run the notebook cells sequentially top-to-bottom.
 
 ## Collecting Results
 The script will output artifacts into `/kaggle/working/artifacts/retrieval/E001-C/`.

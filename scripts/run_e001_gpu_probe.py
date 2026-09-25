@@ -79,7 +79,8 @@ def run_probe_gpu(view_col, config_path, data_dir, artifact_dir):
     total_s1 = len(s1)
     
     # 2. Sample S1
-    s1_sample_ids = safe_sample_s1(folds, n_samples=50000)
+    n_samples = config.get('sample_size', 50000)
+    s1_sample_ids = safe_sample_s1(folds, n_samples=n_samples)
     s1_sample = s1[s1['entity_id'].isin(s1_sample_ids)].copy()
     
     print(f"Total S1 entities (for projection): {total_s1}")
