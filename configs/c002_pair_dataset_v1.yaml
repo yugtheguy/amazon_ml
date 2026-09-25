@@ -1,0 +1,39 @@
+# C002 Pair Dataset V1 — Configuration
+
+# ---------------------------------------------------------------------------
+# Experiment Identity
+# ---------------------------------------------------------------------------
+experiment_id: "C002"
+parent_experiment: "C001"
+schema_version: "v1"
+candidate_pool_version: "C001_R001_v1"
+
+# ---------------------------------------------------------------------------
+# Input Paths  (override on Kaggle)
+# ---------------------------------------------------------------------------
+# C001 final shard directory (contains India_shard_*.parquet, US_shard_*.parquet)
+candidate_pool_dir: "artifacts/candidate_pool/C001/candidate_pool_v1/final"
+
+# Official ground truth — NEVER substitute another source
+ground_truth_path: "data/raw/train/train_ground_truth.tsv"
+
+# Frozen fold manifest — SHA256 verified
+fold_manifest_path: "artifacts/folds/folds_v1.parquet"
+fold_manifest_sha256: "c31fe0adea7cd85e703b6535627e8ad155e0579097321771b10ee2569571937d"
+
+# Processed S1 — for country attachment
+# Optional: if absent, country will be null
+processed_s1_path: ""   # fill in e.g. /kaggle/input/.../train_source1.parquet
+
+# ---------------------------------------------------------------------------
+# Output Path
+# ---------------------------------------------------------------------------
+output_dir: "artifacts/datasets/C002/pair_dataset_v1"
+
+# ---------------------------------------------------------------------------
+# Processing
+# ---------------------------------------------------------------------------
+include_diagnostics: true   # Attach Category C diagnostic columns
+
+# Shard chunk_size: not used in C002 (shard boundaries come from C001)
+# C002 processes one C001 shard at a time, no re-chunking.
