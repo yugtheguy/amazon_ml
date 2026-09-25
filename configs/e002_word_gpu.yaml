@@ -1,0 +1,21 @@
+# E002-A Word TF-IDF GPU Retrieval Config
+retrieval:
+  method: gpu_word_tfidf
+  dtype: float32
+  
+  # Probe settings
+  sample_size: 50000
+  batch_size: 1000
+  
+  # K frontier
+  top_k: 20
+  
+  # Vectorizer settings
+  analyzer: word
+  ngram_min: 1
+  ngram_max: 2
+  norm: l2
+  sublinear_tf: true
+  max_features: null
+  min_df: 1
+  max_df: 1.0
