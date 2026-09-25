@@ -1,0 +1,16 @@
+{
+    "internal": {
+        "pair_recall": 0.8792352161660117,
+        "full_coverage": 0.6916200643958651,
+        "mean_candidates": 22.32148,
+        "median": 19.0,
+        "p90": 26.0,
+        "p95": 49.0,
+        "p99": 94.0,
+        "max": 179,
+        "zero_match_mean_candidates": 24.17406876790831,
+        "zero_match_zero_cand_pct": 0.0,
+        "s2_candidates": 559698,
+        "s3_candidates": 556376
+    }
+}

@@ -1,6 +1,10 @@
 import numpy as np
 import scipy.sparse as sp
-from sparse_dot_topn import sp_matmul_topn
+try:
+    from sparse_dot_topn import sp_matmul_topn
+    HAS_SPARSE_DOT_TOPN = True
+except ImportError:
+    HAS_SPARSE_DOT_TOPN = False
 import logging
 
 logger = logging.getLogger(__name__)
@@ -35,6 +39,9 @@ def sparse_top_k(query_matrix: sp.csr_matrix, index_matrix_t: sp.csr_matrix, k: 
     # query_matrix is (num_queries x vocab)
     # index_matrix_t is (vocab x num_docs)
     # the output C will be (num_queries x num_docs) containing at most actual_k elements per row
+    if not HAS_SPARSE_DOT_TOPN:
+        raise ImportError("sparse_dot_topn is missing. Please install it to use CPU fallback retrieval.")
+        
     C = sp_matmul_topn(
         query_matrix.tocsr(),
         index_matrix_t.tocsr(),
