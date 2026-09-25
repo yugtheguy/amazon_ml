@@ -103,7 +103,7 @@ def run_experiment(args):
     s3 = pd.read_parquet(os.path.join(processed_dir, "train_source3.parquet"))
     gt = pd.read_csv(os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv"), sep="\t", dtype=str).fillna("")
     n_samples = args.probe_size if args.probe_size > 0 else args.smoke_size
-    if args.smoke_ids_file and os.path.exists(args.smoke_ids_file):
+    if args.smoke_size > 0 and args.probe_size == 0 and args.smoke_ids_file and os.path.exists(args.smoke_ids_file):
         logging.info(f"[R001] Loading deterministic smoke IDs from {args.smoke_ids_file}")
         smoke_ids_df = pd.read_csv(args.smoke_ids_file)
         s1_sample_ids = smoke_ids_df['entity_id_s1'].values
