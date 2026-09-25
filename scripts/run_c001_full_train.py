@@ -361,28 +361,66 @@ def run_orchestrator(args):
         for k, v in cands_map.items()
     ])
     
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    fold_path = os.path.normpath(os.path.join(repo_root, "artifacts", "folds", "fold_manifest_v1.parquet"))
+    # Resolve fold manifest path: prefer explicit --fold-manifest arg, then repo default
+    if args.fold_manifest:
+        fold_path = os.path.abspath(args.fold_manifest)
+    else:
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        fold_path = os.path.normpath(os.path.join(repo_root, "artifacts", "folds", "folds_v1.parquet"))
+    
     if not os.path.exists(fold_path):
-        raise FileNotFoundError(f"CRITICAL: Frozen folds_v1.parquet not found at {fold_path}")
-    folds_df = pd.read_parquet(fold_path)[['entity_id', 'fold_id']]
-    if folds_df['entity_id'].duplicated().any():
-        raise ValueError("Frozen folds contain duplicate entity_ids!")
-        
+        raise FileNotFoundError(
+            f"CRITICAL: Frozen fold manifest not found at {fold_path}\n"
+            f"Run: python scripts/build_folds.py\n"
+            f"Or pass --fold-manifest /path/to/folds_v1.parquet"
+        )
+    
+    # Load and validate fold manifest
+    # Schema from build_fold_manifest: source1_entity_id, country, n_true_matches, match_bucket, source_pattern, fold_id
+    folds_df = pd.read_parquet(fold_path)[['source1_entity_id', 'fold_id']]
+    if folds_df['source1_entity_id'].duplicated().any():
+        raise ValueError("Frozen fold manifest contains duplicate source1_entity_id entries!")
+    if folds_df['fold_id'].isnull().any():
+        raise ValueError("Frozen fold manifest contains null fold_id values!")
+    
+    # Compute and log SHA256 provenance
+    import hashlib
+    fold_sha256 = hashlib.sha256(open(fold_path, 'rb').read()).hexdigest()
+    n_folds = folds_df['fold_id'].nunique()
+    logging.info(f"FOLD MANIFEST: {fold_path}")
+    logging.info(f"FOLD SHA256:   {fold_sha256}")
+    logging.info(f"FOLD ROWS:     {len(folds_df)} entities, {n_folds} folds")
+    
     s1_all = pd.read_parquet(os.path.join(processed_dir, "train_source1.parquet"), columns=['entity_id', 'country'])
     if args.smoke_size > 0:
         s1_all = s1_all.head(args.smoke_size)
     
+    # Join folds by source1_entity_id (the canonical key in the fold manifest)
     manifest_df = s1_all.rename(columns={'entity_id': 'entity_id_s1'})
-    manifest_df = manifest_df.merge(folds_df.rename(columns={'entity_id': 'entity_id_s1', 'fold_id': 'fold'}), on='entity_id_s1', how='left')
+    manifest_df = manifest_df.merge(
+        folds_df.rename(columns={'source1_entity_id': 'entity_id_s1', 'fold_id': 'fold'}),
+        on='entity_id_s1', how='left'
+    )
     
-    if manifest_df['fold'].isna().any():
-        raise ValueError("Some S1 entities are missing from the frozen folds_v1.parquet!")
+    missing_folds = manifest_df['fold'].isna().sum()
+    if missing_folds > 0:
+        raise ValueError(
+            f"CRITICAL: {missing_folds} S1 entities are missing from the frozen fold manifest at {fold_path}!\n"
+            f"The fold manifest has {len(folds_df)} entities; training S1 has {len(manifest_df)} entities."
+        )
         
     manifest_df = manifest_df.merge(cand_counts, on='entity_id_s1', how='left')
     manifest_df['candidate_count'] = manifest_df['candidate_count'].fillna(0).astype(int)
     manifest_df['has_candidates'] = (manifest_df['candidate_count'] > 0).astype(int)
     manifest_df.to_parquet(os.path.join(package_dir, "train_candidate_entity_manifest_v1.parquet"), index=False)
+    
+    # Persist fold provenance into run manifest (written below)
+    fold_provenance = {
+        "fold_manifest_path": fold_path,
+        "fold_manifest_sha256": fold_sha256,
+        "fold_manifest_rows": len(folds_df),
+        "n_folds": n_folds,
+    }
     
     # GT Miss Analysis stream
     miss_files = [os.path.join(metrics_dir, f) for f in os.listdir(metrics_dir) if f.endswith("_misses.parquet")]
@@ -423,7 +461,8 @@ def run_orchestrator(args):
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "input_s1_rows": len(s1_all),
         "output_final_cands": output_final_cands,
-        "validation_status": "PASSED"
+        "validation_status": "PASSED",
+        "fold_provenance": fold_provenance,
     }
     with open(os.path.join(manifest_dir, "run_manifest.json"), "w") as f:
         json.dump(run_manifest, f, indent=4)
@@ -458,6 +497,9 @@ if __name__ == "__main__":
     parser.add_argument('--data-dir', type=str, default='data')
     parser.add_argument('--processed-dir', type=str, default=None)
     parser.add_argument('--out-dir', type=str, default='artifacts/candidate_pool')
+    parser.add_argument('--fold-manifest', type=str, default=None,
+                        help='Path to frozen fold manifest parquet (folds_v1.parquet). '
+                             'Defaults to artifacts/folds/folds_v1.parquet relative to repo root.')
     parser.add_argument('--smoke-size', type=int, default=0)
     parser.add_argument('--chunk-size', type=int, default=50000)
     parser.add_argument('--country', type=str, default=None)
