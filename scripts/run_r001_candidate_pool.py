@@ -126,10 +126,7 @@ def run_experiment(args):
     
     logging.info(f"Generation took {time.time() - t0:.1f}s. Memory delta: {mem_after - mem_before:.1f} MB")
     
-    if args.smoke_size > 0 and args.probe_size == 0:
-        logging.info("Smoke test completed.")
-        return
-        
+    # Proceed to evaluation and pruning for both smoke and probe
     # Write internal candidates
     union_df.to_parquet(os.path.join(args.out_dir, "internal_candidates.parquet"), index=False)
     
