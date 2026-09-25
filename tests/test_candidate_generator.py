@@ -37,6 +37,8 @@ def test_candidate_generator():
         'addr_numeric_tokens': ['123', '456', '', '']
     })
     
+    import os
+    os.environ['ALLOW_CPU_TFIDF'] = '1'
     union_df = gen.generate(s1, {'S2': s2})
     
     assert len(union_df) > 0
@@ -65,17 +67,17 @@ def test_gpu_batch_size():
     cg.sp_matmul_topn_cupy = mock_sp
     
     with patch("src.business_entity_resolution.retrieval.candidate_generator.HAS_CUML", True):
-        with patch("src.business_entity_resolution.retrieval.candidate_generator.TFIDF") as mock_vec:
+        with patch("src.business_entity_resolution.retrieval.candidate_generator.CuMLTfidfVectorizer", create=True) as mock_vec:
             mock_vec.return_value.fit_transform.return_value = MagicMock()
             mock_vec.return_value.transform.return_value = MagicMock()
                 
-                try:
-                    gen._run_word_tfidf(s1, s2, "S2", "name_norm_clean", config['name_word'], "name_word")
-                except Exception:
-                    pass # Ignore downstream errors caused by mocking
-                    
-                mock_sp.assert_called_once()
-                _, kwargs = mock_sp.call_args
-                assert kwargs.get('batch_size') == 42
+            try:
+                gen._run_word_tfidf(s1, s2, "S2", "name_norm_clean", config['name_word'], "name_word")
+            except Exception:
+                pass # Ignore downstream errors caused by mocking
+                
+            mock_sp.assert_called_once()
+            _, kwargs = mock_sp.call_args
+            assert kwargs.get('batch_size') == 42
 
     

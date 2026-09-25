@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 class CandidateGenerator:
     def __init__(self, config):
         self.config = config
+        self._tfidf_cache = {}
         
     def _run_exact(self, s1: pd.DataFrame, target: pd.DataFrame, source_name: str) -> pd.DataFrame:
         logger.info(f"[R001] Exact [{source_name}]             START")
@@ -115,13 +116,21 @@ class CandidateGenerator:
             if len(c_s1) == 0 or len(c_target) == 0:
                 continue
                 
-            vec = TFIDF(**vec_kwargs)
-            
-            if HAS_CUML:
+            cache_key = (source_name, country, channel_prefix)
+            if cache_key in self._tfidf_cache:
+                vec, X_target, cand_ids = self._tfidf_cache[cache_key]
+                logger.info(f"[{channel_prefix}][{source_name}][{country}] Target cache HIT.")
+            else:
+                logger.info(f"[{channel_prefix}][{source_name}][{country}] Target cache MISS. Building...")
+                vec = TFIDF(**vec_kwargs)
                 X_target = vec.fit_transform(c_target[view_col])
-                X_query = vec.transform(c_s1[view_col])
-                if hasattr(X_target, 'get'):
+                if HAS_CUML and hasattr(X_target, 'get'):
                     X_target = X_target.get()
+                cand_ids = c_target['entity_id'].values
+                self._tfidf_cache[cache_key] = (vec, X_target, cand_ids)
+                
+            if HAS_CUML:
+                X_query = vec.transform(c_s1[view_col])
                 if hasattr(X_query, 'get'):
                     X_query = X_query.get()
                 
@@ -131,7 +140,6 @@ class CandidateGenerator:
                 
                 # top_sparse is csr
                 s1_ids = c_s1['entity_id'].values
-                cand_ids = c_target['entity_id'].values
                 
                 for i in range(len(s1_ids)):
                     r_start = top_sparse.indptr[i]
@@ -142,12 +150,10 @@ class CandidateGenerator:
                         score = top_sparse.data[j]
                         all_results.append((s_id, cand_ids[idx], score, j - r_start + 1))
             else:
-                X_target = vec.fit_transform(c_target[view_col])
                 X_query = vec.transform(c_s1[view_col])
                 top_indices, top_scores = sparse_top_k(X_query, X_target.T, k=top_k)
                 
                 s1_ids = c_s1['entity_id'].values
-                cand_ids = c_target['entity_id'].values
                 
                 for i in range(len(s1_ids)):
                     s_id = s1_ids[i]
