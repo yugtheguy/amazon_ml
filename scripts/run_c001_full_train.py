@@ -361,7 +361,8 @@ def run_orchestrator(args):
         for k, v in cands_map.items()
     ])
     
-    fold_path = os.path.normpath(os.path.join(args.out_dir, "..", "folds", "fold_manifest_v1.parquet"))
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    fold_path = os.path.normpath(os.path.join(repo_root, "artifacts", "folds", "fold_manifest_v1.parquet"))
     if not os.path.exists(fold_path):
         raise FileNotFoundError(f"CRITICAL: Frozen folds_v1.parquet not found at {fold_path}")
     folds_df = pd.read_parquet(fold_path)[['entity_id', 'fold_id']]
