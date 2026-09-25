@@ -135,6 +135,7 @@ def run_probe_gpu(view_col, config_path, data_dir, artifact_dir):
     valid_s1 = s1_sample[~s1_sample['is_empty']]
     
     try:
+        # pyrefly: ignore [missing-import]
         from cuml.feature_extraction.text import TfidfVectorizer
         TFIDF = TfidfVectorizer
         print("Using cuML TfidfVectorizer")
