@@ -174,7 +174,7 @@ def run_experiment(args):
     max_cands = config.get('pruning', {}).get('candidate_budgets', [15])[-1]
     
     # Partition logic: Country + Shard
-    chunk_size = 50000
+    chunk_size = args.chunk_size
     s1_shards = []
     for country in s1['country'].unique():
         country_s1 = s1[s1['country'] == country].sort_values('entity_id').reset_index(drop=True)
@@ -266,11 +266,27 @@ def run_experiment(args):
     # Entity Manifest
     cand_counts = final_candidates_df.groupby('entity_id_s1').size().reset_index(name='candidate_count')
     
-    manifest_cols = ['entity_id', 'country']
-    if 'fold' in s1.columns:
-        manifest_cols.append('fold')
-    manifest_df = s1[manifest_cols].rename(columns={'entity_id': 'entity_id_s1'})
+    # Strictly join FOLDS_V1
+    fold_path = os.path.join(args.out_dir, "..", "folds", "fold_manifest_v1.parquet")
+    fold_path = os.path.normpath(fold_path)
+    if not os.path.exists(fold_path):
+        raise FileNotFoundError(f"CRITICAL: Frozen folds_v1.parquet not found at {fold_path}")
+        
+    folds_df = pd.read_parquet(fold_path)
+    if 'fold_id' not in folds_df.columns or 'entity_id' not in folds_df.columns:
+        raise ValueError("Frozen folds missing entity_id or fold_id")
+        
+    folds_df = folds_df[['entity_id', 'fold_id']]
+    # Verify no duplicates
+    if folds_df['entity_id'].duplicated().any():
+        raise ValueError("Frozen folds contain duplicate entity_ids!")
+        
+    manifest_df = s1[['entity_id', 'country']].rename(columns={'entity_id': 'entity_id_s1'})
+    manifest_df = manifest_df.merge(folds_df.rename(columns={'entity_id': 'entity_id_s1', 'fold_id': 'fold'}), on='entity_id_s1', how='left')
     
+    if manifest_df['fold'].isna().any():
+        raise ValueError("Some S1 entities are missing from the frozen folds_v1.parquet!")
+        
     manifest_df = manifest_df.merge(cand_counts, on='entity_id_s1', how='left')
     manifest_df['candidate_count'] = manifest_df['candidate_count'].fillna(0).astype(int)
     manifest_df['has_candidates'] = (manifest_df['candidate_count'] > 0).astype(int)
@@ -344,6 +360,7 @@ if __name__ == "__main__":
     parser.add_argument('--processed-dir', type=str, default=None)
     parser.add_argument('--out-dir', type=str, default='artifacts/candidate_pool')
     parser.add_argument('--smoke-size', type=int, default=0)
+    parser.add_argument('--chunk-size', type=int, default=50000)
     args = parser.parse_args()
     
     if args.processed_dir is None:
