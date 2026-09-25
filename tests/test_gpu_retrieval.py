@@ -22,9 +22,9 @@ def test_sp_matmul_topn_cupy_correctness():
     A_indptr = np.array([0, 2, 3], dtype=np.int32)
     A_cpu = scipy.sparse.csr_matrix((A_data, A_indices, A_indptr), shape=(2, 3))
     
-    B_T_data = np.array([1.0, 1.0, 1.0, 1.0, 1.0], dtype=np.float32)
-    B_T_indices = np.array([0, 2, 0, 1, 2], dtype=np.int32)
-    B_T_indptr = np.array([0, 2, 5], dtype=np.int32)
+    B_T_data = np.array([1.0, 1.0, 1.0, 1.0], dtype=np.float32)
+    B_T_indices = np.array([0, 1, 0, 1], dtype=np.int32)
+    B_T_indptr = np.array([0, 1, 2, 4], dtype=np.int32)
     B_T_cpu = scipy.sparse.csr_matrix((B_T_data, B_T_indices, B_T_indptr), shape=(3, 2))
     
     # Brute force CPU dense:
