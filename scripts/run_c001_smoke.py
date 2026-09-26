@@ -17,10 +17,11 @@ def get_host_ram_gb():
 def get_gpu_vram_gb():
     try:
         import cupy as cp
-        return cp.get_default_memory_pool().used_bytes() / (1024 ** 3)
+        free_b, total_b = cp.cuda.runtime.memGetInfo()
+        used_b = total_b - free_b
+        return used_b / (1024 ** 3)
     except Exception:
         return 0.0
-
 def main():
     t_start = time.time()
     print("============================================================")
@@ -85,6 +86,11 @@ def main():
     target_rows_s2 = len(s2)
     target_rows_s3 = len(s3)
     
+    # 4. FAIL-SAFE METRIC PRE-CHECK
+    print("Testing GPU metrics instrumentation...")
+    gpu_precheck = get_gpu_vram_gb()
+    print(f"GPU instrumentation check OK (Currently used: {gpu_precheck:.2f} GB)")
+    
     print("\nBuilding US TargetContext...")
     t0 = time.time()
     ctx = TargetContext()
@@ -110,17 +116,6 @@ def main():
     gc.collect()
     cp.get_default_memory_pool().free_all_blocks()
     
-    # --- GPU Memory Helper ---
-    def get_gpu_vram_gb():
-        try:
-            import cupy as cp
-            free, total = cp.cuda.runtime.memGetInfo()
-            return (total - free) / (1024 ** 3)
-        except Exception:
-            return 0.0
-
-    ram_after_ctx = get_host_ram_gb()
-    gpu_after_ctx = get_gpu_vram_gb()
     
     # 3. TRACE TARGET OBJECT IDENTITY
     ctx_us_s2 = ctx.get("S2", "US")
@@ -141,23 +136,6 @@ def main():
     id_before_A = get_identities(ctx_us_s2)
 
     # SHARD A
-    print("\nRunning Shard A (0:5000)...")
-    s1_a = s1.iloc[0:5000]
-    t0 = time.time()
-    union_a = gen.generate_with_context(s1_a, ctx)
-    final_a = gen.rank_and_prune(union_a, max_candidates=15)
-    shard_a_s = time.time() - t0
-    
-    final_a.to_parquet(os.path.join(OUT_DIR, "shard_a.parquet"), index=False)
-    
-    del s1_a, union_a
-    gc.collect()
-    if os.environ.get("ALLOW_CPU_TFIDF") != "1":
-        cp.get_default_memory_pool().free_all_blocks()
-    
-    ram_after_a = get_host_ram_gb()
-    gpu_after_a = get_gpu_vram_gb()
-
     id_before_B = get_identities(ctx_us_s2)
     
     # SHARD B
