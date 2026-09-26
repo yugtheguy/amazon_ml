@@ -352,12 +352,20 @@ def build_entity_manifest(
                     "fold": fold_map.get(s1_id, -1),
                     "candidate_count": 0,
                     "positive_candidate_count": 0,
+                    "retrieved_s2_count": 0,
+                    "retrieved_s3_count": 0,
                     "has_retrieved_positive": False,
                     "gt_match_count": n_gt,
+                    "gt_s2_count": sum(1 for x in gt_matches if x.startswith("S2")),
+                    "gt_s3_count": sum(1 for x in gt_matches if x.startswith("S3")),
                     "match_bucket": classify_match_bucket(n_gt),
                 }
             records[s1_id]["candidate_count"] += len(grp)
-            records[s1_id]["positive_candidate_count"] += int(grp[LABEL_COLUMN].sum())
+            
+            pos_mask = grp[LABEL_COLUMN] == 1
+            records[s1_id]["positive_candidate_count"] += int(pos_mask.sum())
+            records[s1_id]["retrieved_s2_count"] += int((pos_mask & (grp["candidate_source"] == "S2")).sum())
+            records[s1_id]["retrieved_s3_count"] += int((pos_mask & (grp["candidate_source"] == "S3")).sum())
 
         del df
         gc.collect()
@@ -370,6 +378,64 @@ def build_entity_manifest(
     manifest_df["fold"] = manifest_df["fold"].astype("int8")
     manifest_df["has_retrieved_positive"] = manifest_df["has_retrieved_positive"].astype(bool)
     return manifest_df.sort_values("entity_id_s1").reset_index(drop=True)
+
+def compute_retrieval_audit(manifest_df: pd.DataFrame) -> dict:
+    """Compute detailed retrieval audit metrics per C002 requirements."""
+    def get_metrics(df_slice):
+        slice_has_gt = df_slice[df_slice["gt_match_count"] > 0]
+        if len(slice_has_gt) == 0:
+            return {"pair_recall": 0.0, "any_gt": 0.0, "full_gt": 0.0}
+            
+        total_gt = slice_has_gt["gt_match_count"].sum()
+        total_retrieved = slice_has_gt["positive_candidate_count"].sum()
+        pair_recall = total_retrieved / total_gt if total_gt > 0 else 0.0
+        
+        any_gt = (slice_has_gt["positive_candidate_count"] > 0).mean()
+        full_gt = (slice_has_gt["positive_candidate_count"] == slice_has_gt["gt_match_count"]).mean()
+        return {"pair_recall": float(pair_recall), "any_gt": float(any_gt), "full_gt": float(full_gt)}
+
+    overall = get_metrics(manifest_df)
+    india = get_metrics(manifest_df[manifest_df["country"] == "India"])
+    us = get_metrics(manifest_df[manifest_df["country"] == "US"])
+    
+    single = get_metrics(manifest_df[manifest_df["match_bucket"] == "SINGLE_MATCH"])
+    multi = get_metrics(manifest_df[manifest_df["match_bucket"] == "MULTI_MATCH"])
+    
+    total_s2_gt = manifest_df["gt_s2_count"].sum()
+    retrieved_s2 = manifest_df["retrieved_s2_count"].sum()
+    s2_recall = retrieved_s2 / total_s2_gt if total_s2_gt > 0 else 0.0
+    
+    total_s3_gt = manifest_df["gt_s3_count"].sum()
+    retrieved_s3 = manifest_df["retrieved_s3_count"].sum()
+    s3_recall = retrieved_s3 / total_s3_gt if total_s3_gt > 0 else 0.0
+
+    missed_gt_pairs = manifest_df["missing_positive_count"].sum()
+    s1_with_gt_zero_retrieved = int((manifest_df["gt_match_count"] > 0) & (manifest_df["positive_candidate_count"] == 0)).sum()
+
+    zero_match_df = manifest_df[manifest_df["match_bucket"] == "ZERO_MATCH"]
+    
+    return {
+        "PAIR_RECALL": overall["pair_recall"],
+        "ANY_GT_COVERAGE": overall["any_gt"],
+        "FULL_GT_COVERAGE": overall["full_gt"],
+        "INDIA_PAIR_RECALL": india["pair_recall"],
+        "INDIA_ANY_GT": india["any_gt"],
+        "INDIA_FULL_GT": india["full_gt"],
+        "US_PAIR_RECALL": us["pair_recall"],
+        "US_ANY_GT": us["any_gt"],
+        "US_FULL_GT": us["full_gt"],
+        "SINGLE_PAIR_RECALL": single["pair_recall"],
+        "SINGLE_FULL_GT": single["full_gt"],
+        "MULTI_PAIR_RECALL": multi["pair_recall"],
+        "MULTI_ANY_GT": multi["any_gt"],
+        "MULTI_FULL_GT": multi["full_gt"],
+        "S2_PAIR_RECALL": float(s2_recall),
+        "S3_PAIR_RECALL": float(s3_recall),
+        "MISSED_GT_PAIRS": int(missed_gt_pairs),
+        "S1_WITH_GT_BUT_ZERO_RETRIEVED": int(s1_with_gt_zero_retrieved),
+        "ZERO_MATCH_ENTITY_COUNT": len(zero_match_df),
+        "ZERO_MATCH_MEAN_CANDIDATES": float(zero_match_df["candidate_count"].mean()) if len(zero_match_df) > 0 else 0.0,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -399,10 +465,10 @@ def build_c002_pair_dataset(cfg: dict) -> None:
     schema_dir = out_dir / "schema"
     shard_dir = out_dir / "shards"
     manifest_dir = out_dir / "manifest"
-    diag_dir = out_dir / "diagnostics"
+    metrics_dir = out_dir / "metrics"
     package_dir = out_dir / "package"
 
-    for d in [schema_dir, shard_dir, manifest_dir, diag_dir, package_dir]:
+    for d in [schema_dir, shard_dir, manifest_dir, metrics_dir, package_dir]:
         d.mkdir(parents=True, exist_ok=True)
 
     # --- Config hash ---
@@ -573,7 +639,7 @@ def build_c002_pair_dataset(cfg: dict) -> None:
         writer.close()
     logger.info(f"[C002] Consolidated package written: {package_path}")
 
-    # --- Diagnostics ---
+    # --- Diagnostics & Retrieval Audit ---
     diag = {
         "total_s1_entities": len(manifest_df),
         "input_candidate_rows": total_input_rows,
@@ -593,10 +659,17 @@ def build_c002_pair_dataset(cfg: dict) -> None:
             if manifest_df["gt_match_count"].sum() > 0 else 0
         ),
     }
-    diag_path = diag_dir / "c002_diagnostics.json"
-    with open(diag_path, "w") as f:
+    
+    label_dist_path = metrics_dir / "label_distribution.json"
+    with open(label_dist_path, "w") as f:
         json.dump(diag, f, indent=2)
-    logger.info(f"[C002] Diagnostics written: {diag_path}")
+        
+    audit_metrics = compute_retrieval_audit(manifest_df)
+    audit_path = metrics_dir / "retrieval_audit.json"
+    with open(audit_path, "w") as f:
+        json.dump(audit_metrics, f, indent=2)
+        
+    logger.info(f"[C002] Diagnostics and retrieval audit written to {metrics_dir}")
 
     # --- Run manifest ---
     t_end = datetime.now(timezone.utc)
@@ -625,7 +698,8 @@ def build_c002_pair_dataset(cfg: dict) -> None:
             "consolidated_pairs": str(package_path),
             "entity_manifest": str(manifest_path),
             "schema_contract": str(schema_dir / "c002_pair_schema_v1.json"),
-            "diagnostics": str(diag_path),
+            "label_distribution": str(label_dist_path),
+            "retrieval_audit": str(audit_path),
             "run_manifest": str(manifest_dir / "run_manifest.json"),
         },
         "validation_status": "PASSED",
