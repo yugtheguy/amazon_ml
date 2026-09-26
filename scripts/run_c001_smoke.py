@@ -209,7 +209,7 @@ def main():
         run_report_only(OUT_DIR)
         return
         
-    if args.validate-only:
+    if args.validate_only:
         run_validate_only(OUT_DIR)
         return
 
