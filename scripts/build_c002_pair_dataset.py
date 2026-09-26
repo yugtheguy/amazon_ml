@@ -6,9 +6,13 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import yaml
 from pathlib import Path
+
+# Add project root to sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.business_entity_resolution.pairs.pair_dataset import build_c002_pair_dataset
 from src.business_entity_resolution.utils.logging import get_logger
