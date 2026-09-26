@@ -72,16 +72,33 @@ def extract_topk_sparse_cupy_kernel(csr_mat, k):
     return final_data, final_indices, new_indptr
 
 
-def sp_matmul_topn_cupy(A, B_T, top_k, batch_size=1000):
+def sp_matmul_topn_cupy(A, B_T, top_k, batch_size=1000, B_gpu=None):
     """
     Perform sparse dot product A * B_T on GPU via CuPy, preserving only top_k per row.
-    A: (n_queries, vocab) scipy CSR
-    B_T: (vocab, n_targets) scipy CSR
+
+    Parameters
+    ----------
+    A       : (n_queries, vocab) scipy CSR   — query matrix (uploaded per batch)
+    B_T     : (vocab, n_targets) scipy CSR   — target matrix (used only if B_gpu is None)
+    top_k   : int
+    batch_size : int
+    B_gpu   : optional pre-uploaded CuPy CSR of B_T (shape: vocab x n_targets).
+              When provided, avoids re-uploading the target matrix to the GPU.
+              Pass TargetContext.name_cache.X_target_gpu (already transposed) here.
+
+    EXECUTION NOTE
+    --------------
+    When called via generate_with_context(), B_gpu is always provided (pre-uploaded
+    in TargetContext.build()). GPU transfer for the target matrix = 0 per shard.
+    When called via legacy generate(), B_gpu=None and transfer happens per call.
     """
     if not HAS_CUPY:
         raise ImportError("CuPy is required for cupy-backend GPU sparse operations.")
-        
-    B_gpu = cpx_sparse.csr_matrix(B_T)
+
+    if B_gpu is None:
+        # Legacy path: upload target matrix now (one transfer per call)
+        B_gpu = cpx_sparse.csr_matrix(B_T)
+
     n_queries = A.shape[0]
     
     out_data = []
