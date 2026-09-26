@@ -129,6 +129,8 @@ def validate_shard(s1_chunk, final_df, gt_dict, union_df, max_candidates=15):
 
 
 def evaluate_pool(cands_map, gt_dict, s1_sample_ids):
+    if not gt_dict:
+        return {"status": "SKIPPED"}
     total_gt = 0
     gt_found = 0
     s1_with_gt = 0
@@ -152,6 +154,7 @@ def evaluate_pool(cands_map, gt_dict, s1_sample_ids):
     mean_zero   = float(np.mean(zero_cands)) if zero_cands else 0.0
     zero_zero_pct = float(sum(1 for z in zero_cands if z == 0) / len(zero_cands)) if zero_cands else 0.0
     return {
+        "status": "COMPUTED",
         "pair_recall":   float(pair_recall),
         "full_coverage": float(full_cov),
         "mean_candidates": float(np.mean(cand_sizes)),
@@ -163,6 +166,24 @@ def evaluate_pool(cands_map, gt_dict, s1_sample_ids):
         "zero_match_mean_candidates": mean_zero,
         "zero_match_zero_cand_pct":   zero_zero_pct,
     }
+
+
+def resolve_ground_truth_if_available(data_dir):
+    gt_path = os.path.join(data_dir, "raw", "train", "train_ground_truth.tsv")
+    if os.path.exists(gt_path):
+        return gt_path
+    
+    import glob
+    # Kaggle fallback
+    matches = glob.glob("/kaggle/input/**/train_ground_truth.tsv", recursive=True)
+    if len(matches) == 1:
+        return matches[0]
+    elif len(matches) > 1:
+        print("WARNING: Multiple ground truth files found. Diagnostics will be disabled.")
+        for m in matches:
+            print(f"  - {m}")
+        return None
+    return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -218,17 +239,8 @@ def run_worker(args):
         os.makedirs(d, exist_ok=True)
 
     # GT (for diagnostics only — not used during retrieval)
-    gt_path = os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv")
-    
-    # Kaggle fallback
-    if not os.path.exists(gt_path):
-        import glob
-        matches = glob.glob("/kaggle/input/**/train_ground_truth.tsv", recursive=True)
-        if matches:
-            gt_path = matches[0]
-
-    if os.path.exists(gt_path):
-        gt = pd.read_csv(gt_path, sep="\t", dtype=str).fillna("")
+    if args.gt_path:
+        gt = pd.read_csv(args.gt_path, sep="\t", dtype=str).fillna("")
         active_s1_ids = set(s1["entity_id"].values)
         gt = gt[gt["source1_entity_id"].isin(active_s1_ids)]
         gt_dict = {
@@ -237,9 +249,10 @@ def run_worker(args):
         }
         del gt
         gc.collect()
+        logging.info("[%s] GT Diagnostics ENABLED. Loaded GT for %d active S1 IDs.", country, len(gt_dict))
     else:
-        logging.warning("No train_ground_truth.tsv found at %s. Evaluation will be skipped.", gt_path)
-        gt_dict = {}
+        logging.warning("[%s] GT Diagnostics DISABLED (No valid train_ground_truth.tsv found).", country)
+        gt_dict = None
 
     # ── 2. BUILD TARGET CONTEXT ONCE ────────────────────────────────────────
     logging.info("[%s] Building TargetContext (ONCE for all shards)...", country)
@@ -338,25 +351,27 @@ def run_worker(args):
 
         # ── GT DIAGNOSTICS (after write — not in retrieval hot path) ─────
         t_diag = time.time()
-        chunk_missed_list = []
-        final_pairs    = set(zip(final_df["entity_id_s1"], final_df["entity_id_cand"]))
-        internal_pairs = set(zip(union_df["entity_id_s1"], union_df["entity_id_cand"]))
-        for s1_id in s1_chunk["entity_id"].values:
-            matches = gt_dict.get(s1_id, set())
-            for m in matches:
-                if (s1_id, m) not in final_pairs:
-                    is_internal = (s1_id, m) in internal_pairs
-                    chunk_missed_list.append({
-                        "source1_entity_id":    s1_id,
-                        "candidate_entity_id":  m,
-                        "miss_type": "pruning_miss" if is_internal else "retrieval_miss",
-                    })
-        misses_df = (
-            pd.DataFrame(chunk_missed_list)
-            if chunk_missed_list
-            else pd.DataFrame(columns=["source1_entity_id", "candidate_entity_id", "miss_type"])
-        )
-        atomic_write_parquet(misses_df, os.path.join(metrics_dir, f"{shard_name}_misses.parquet"))
+        if gt_dict is not None:
+            chunk_missed_list = []
+            final_pairs    = set(zip(final_df["entity_id_s1"], final_df["entity_id_cand"]))
+            internal_pairs = set(zip(union_df["entity_id_s1"], union_df["entity_id_cand"]))
+            for s1_id in s1_chunk["entity_id"].values:
+                matches = gt_dict.get(s1_id, set())
+                for m in matches:
+                    if (s1_id, m) not in final_pairs:
+                        is_internal = (s1_id, m) in internal_pairs
+                        chunk_missed_list.append({
+                            "source1_entity_id":    s1_id,
+                            "candidate_entity_id":  m,
+                            "miss_type": "pruning_miss" if is_internal else "retrieval_miss",
+                        })
+            misses_df = (
+                pd.DataFrame(chunk_missed_list)
+                if chunk_missed_list
+                else pd.DataFrame(columns=["source1_entity_id", "candidate_entity_id", "miss_type"])
+            )
+            atomic_write_parquet(misses_df, os.path.join(metrics_dir, f"{shard_name}_misses.parquet"))
+            del final_pairs, internal_pairs, misses_df, chunk_missed_list
         diag_s = time.time() - t_diag
 
         elapsed = time.time() - t0
@@ -384,8 +399,7 @@ def run_worker(args):
         )
 
         # ── PER-SHARD CLEANUP (do NOT release target context) ────────────
-        del s1_chunk, union_df, final_df, final_pairs, internal_pairs, misses_df
-        del chunk_missed_list
+        del s1_chunk, union_df, final_df
         if "cp" in sys.modules:
             try:
                 import cupy as cp
@@ -447,6 +461,8 @@ def run_orchestrator(args):
             "--smoke-size", str(args.smoke_size),
             "--chunk-size", str(args.chunk_size),
         ]
+        if args.gt_path:
+            cmd += ["--gt-path", args.gt_path]
         if args.fold_manifest:
             cmd += ["--fold-manifest", args.fold_manifest]
         env = os.environ.copy()
@@ -584,15 +600,8 @@ def run_orchestrator(args):
         )
 
     # Evaluation
-    gt_path = os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv")
-    if not os.path.exists(gt_path):
-        import glob
-        matches = glob.glob("/kaggle/input/**/train_ground_truth.tsv", recursive=True)
-        if matches:
-            gt_path = matches[0]
-            
-    if os.path.exists(gt_path):
-        gt = pd.read_csv(gt_path, sep="\t", dtype=str).fillna("")
+    if args.gt_path:
+        gt = pd.read_csv(args.gt_path, sep="\t", dtype=str).fillna("")
         gt_dict = {
             row.source1_entity_id: set(row.matched_entity_ids.split(",")) if row.matched_entity_ids else set()
             for row in gt.itertuples(index=False)
@@ -602,8 +611,11 @@ def run_orchestrator(args):
         eval_res = evaluate_pool(cands_map, gt_dict, s1_all["entity_id"].values)
         with open(os.path.join(metrics_dir, "evaluation_metrics.json"), "w") as f:
             json.dump(eval_res, f, indent=4)
+        logging.info("Final evaluation metrics computed.")
     else:
-        logging.warning("No train_ground_truth.tsv found at %s. Skipping final evaluation.", gt_path)
+        logging.warning("GT Diagnostics = SKIPPED (No ground truth found).")
+        with open(os.path.join(metrics_dir, "evaluation_metrics.json"), "w") as f:
+            json.dump({"status": "SKIPPED"}, f, indent=4)
 
     run_manifest = {
         "experiment_id":            "C001",
@@ -663,10 +675,15 @@ if __name__ == "__main__":
     parser.add_argument("--smoke-size",     type=int, default=0)
     parser.add_argument("--chunk-size",     type=int, default=50000)
     parser.add_argument("--country",        type=str, default=None)
+    parser.add_argument("--gt-path",        type=str, default=None)
     args = parser.parse_args()
 
     if args.processed_dir is None:
         args.processed_dir = os.path.join(args.data_dir, "processed", "v001")
+
+    # Try to resolve GT
+    if not args.gt_path:
+        args.gt_path = resolve_ground_truth_if_available(args.data_dir)
 
     s1_path = os.path.join(args.processed_dir, "train_source1.parquet")
     s2_path = os.path.join(args.processed_dir, "train_source2.parquet")
@@ -679,6 +696,7 @@ if __name__ == "__main__":
     print(f"S1 = {s1_path}")
     print(f"S2 = {s2_path}")
     print(f"S3 = {s3_path}")
+    print(f"GT = {args.gt_path if args.gt_path else 'NONE'}")
     print(f"CONFIG = {config_path}")
     print(f"OUTPUT_ROOT = {args.out_dir}")
     print("============================================================\n")
