@@ -218,18 +218,28 @@ def run_worker(args):
         os.makedirs(d, exist_ok=True)
 
     # GT (for diagnostics only — not used during retrieval)
-    gt = pd.read_csv(
-        os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv"),
-        sep="\t", dtype=str,
-    ).fillna("")
-    active_s1_ids = set(s1["entity_id"].values)
-    gt = gt[gt["source1_entity_id"].isin(active_s1_ids)]
-    gt_dict = {
-        row.source1_entity_id: set(row.matched_entity_ids.split(",")) if row.matched_entity_ids else set()
-        for row in gt.itertuples(index=False)
-    }
-    del gt
-    gc.collect()
+    gt_path = os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv")
+    
+    # Kaggle fallback
+    if not os.path.exists(gt_path):
+        import glob
+        matches = glob.glob("/kaggle/input/**/train_ground_truth.tsv", recursive=True)
+        if matches:
+            gt_path = matches[0]
+
+    if os.path.exists(gt_path):
+        gt = pd.read_csv(gt_path, sep="\t", dtype=str).fillna("")
+        active_s1_ids = set(s1["entity_id"].values)
+        gt = gt[gt["source1_entity_id"].isin(active_s1_ids)]
+        gt_dict = {
+            row.source1_entity_id: set(row.matched_entity_ids.split(",")) if row.matched_entity_ids else set()
+            for row in gt.itertuples(index=False)
+        }
+        del gt
+        gc.collect()
+    else:
+        logging.warning("No train_ground_truth.tsv found at %s. Evaluation will be skipped.", gt_path)
+        gt_dict = {}
 
     # ── 2. BUILD TARGET CONTEXT ONCE ────────────────────────────────────────
     logging.info("[%s] Building TargetContext (ONCE for all shards)...", country)
@@ -574,19 +584,26 @@ def run_orchestrator(args):
         )
 
     # Evaluation
-    gt = pd.read_csv(
-        os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv"),
-        sep="\t", dtype=str,
-    ).fillna("")
-    gt_dict = {
-        row.source1_entity_id: set(row.matched_entity_ids.split(",")) if row.matched_entity_ids else set()
-        for row in gt.itertuples(index=False)
-    }
-    del gt
-    gc.collect()
-    eval_res = evaluate_pool(cands_map, gt_dict, s1_all["entity_id"].values)
-    with open(os.path.join(metrics_dir, "evaluation_metrics.json"), "w") as f:
-        json.dump(eval_res, f, indent=4)
+    gt_path = os.path.join(args.data_dir, "raw", "train", "train_ground_truth.tsv")
+    if not os.path.exists(gt_path):
+        import glob
+        matches = glob.glob("/kaggle/input/**/train_ground_truth.tsv", recursive=True)
+        if matches:
+            gt_path = matches[0]
+            
+    if os.path.exists(gt_path):
+        gt = pd.read_csv(gt_path, sep="\t", dtype=str).fillna("")
+        gt_dict = {
+            row.source1_entity_id: set(row.matched_entity_ids.split(",")) if row.matched_entity_ids else set()
+            for row in gt.itertuples(index=False)
+        }
+        del gt
+        gc.collect()
+        eval_res = evaluate_pool(cands_map, gt_dict, s1_all["entity_id"].values)
+        with open(os.path.join(metrics_dir, "evaluation_metrics.json"), "w") as f:
+            json.dump(eval_res, f, indent=4)
+    else:
+        logging.warning("No train_ground_truth.tsv found at %s. Skipping final evaluation.", gt_path)
 
     run_manifest = {
         "experiment_id":            "C001",
