@@ -4,17 +4,24 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+import argparse
 from src.business_entity_resolution.data.folds import build_fold_manifest
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source1", type=str, default="data/raw/train/train_source1.tsv")
+    parser.add_argument("--ground-truth", type=str, default="data/raw/train/train_ground_truth.tsv")
+    parser.add_argument("--output-dir", type=str, default="artifacts/folds")
+    args = parser.parse_args()
+
     manifest = build_fold_manifest(
-        source1_path="data/raw/train/train_source1.tsv",
-        ground_truth_path="data/raw/train/train_ground_truth.tsv",
+        source1_path=args.source1,
+        ground_truth_path=args.ground_truth,
         n_folds=5,
         seed=42,
         version="v1",
-        output_dir="artifacts/folds",
+        output_dir=args.output_dir,
     )
 
     print(f"\n=== Fold Manifest Summary ===")
