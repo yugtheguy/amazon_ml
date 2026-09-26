@@ -110,9 +110,56 @@ def main():
     gc.collect()
     cp.get_default_memory_pool().free_all_blocks()
     
+    # --- GPU Memory Helper ---
+    def get_gpu_vram_gb():
+        try:
+            import cupy as cp
+            free, total = cp.cuda.runtime.memGetInfo()
+            return (total - free) / (1024 ** 3)
+        except Exception:
+            return 0.0
+
+    ram_after_ctx = get_host_ram_gb()
+    gpu_after_ctx = get_gpu_vram_gb()
+    
+    # 3. TRACE TARGET OBJECT IDENTITY
+    ctx_us_s2 = ctx.get("S2", "US")
+    
+    def get_identities(c):
+        return {
+            "name_vec": id(c.name_cache.vec) if c.name_cache else None,
+            "name_cpu": id(c.name_cache.X_target_cpu) if c.name_cache else None,
+            "name_gpu": id(c.name_cache.X_target_gpu) if c.name_cache and c.name_cache.X_target_gpu is not None else None,
+            "addr_vec": id(c.addr_cache.vec) if c.addr_cache else None,
+            "addr_cpu": id(c.addr_cache.X_target_cpu) if c.addr_cache else None,
+            "addr_gpu": id(c.addr_cache.X_target_gpu) if c.addr_cache and c.addr_cache.X_target_gpu is not None else None,
+            "exact": id(c.target_unique_name_df),
+            "rare": id(c.rare_postings),
+            "num": id(c.numeric_postings)
+        }
+    
+    id_before_A = get_identities(ctx_us_s2)
+
+    # SHARD A
+    print("\nRunning Shard A (0:5000)...")
+    s1_a = s1.iloc[0:5000]
+    t0 = time.time()
+    union_a = gen.generate_with_context(s1_a, ctx)
+    final_a = gen.rank_and_prune(union_a, max_candidates=15)
+    shard_a_s = time.time() - t0
+    
+    final_a.to_parquet(os.path.join(OUT_DIR, "shard_a.parquet"), index=False)
+    
+    del s1_a, union_a
+    gc.collect()
+    if os.environ.get("ALLOW_CPU_TFIDF") != "1":
+        cp.get_default_memory_pool().free_all_blocks()
+    
     ram_after_a = get_host_ram_gb()
     gpu_after_a = get_gpu_vram_gb()
 
+    id_before_B = get_identities(ctx_us_s2)
+    
     # SHARD B
     print("\nRunning Shard B (5000:10000)...")
     s1_b = s1.iloc[5000:10000]
@@ -125,10 +172,13 @@ def main():
     
     del s1_b, union_b
     gc.collect()
-    cp.get_default_memory_pool().free_all_blocks()
+    if os.environ.get("ALLOW_CPU_TFIDF") != "1":
+        cp.get_default_memory_pool().free_all_blocks()
     
     ram_after_b = get_host_ram_gb()
     gpu_after_b = get_gpu_vram_gb()
+    
+    id_after_B = get_identities(ctx_us_s2)
     
     # 6. Basic validation
     output_df = pd.concat([final_a, final_b])
@@ -148,9 +198,9 @@ def main():
     ]
     channels_executed = all(c in output_df.columns and output_df[c].sum() > 0 for c in channels)
     
-    # 7. Verify reuse (implicitly checked by Shard B time << Context Build Time, and memory stability)
-    rebuild_target = shard_b_s > (ctx_build_s * 0.5)
-    reupload_gpu = shard_b_s > 30.0 # Strict bound for pure retrieval + rank
+    # 7. Verify reuse correctly based on object identity, NOT duration heuristics
+    rebuild_target = (id_before_A != id_before_B) or (id_before_B != id_after_B)
+    reupload_gpu = (id_before_A["name_gpu"] != id_before_B["name_gpu"]) or (id_before_B["name_gpu"] != id_after_B["name_gpu"])
     
     passed = (
         valid_sources and valid_count and valid_dups and channels_executed and 
@@ -172,14 +222,37 @@ def main():
     print(f"HOST_RAM_AFTER_CONTEXT_GB = {ram_after_ctx:.2f}")
     print(f"HOST_RAM_AFTER_SHARD_A_GB = {ram_after_a:.2f}")
     print(f"HOST_RAM_AFTER_SHARD_B_GB = {ram_after_b:.2f}\n")
+    
+    try:
+        import cupy as cp
+        free_gb, total_gb = cp.cuda.runtime.memGetInfo()
+        free_gb /= (1024**3)
+        total_gb /= (1024**3)
+        print(f"GPU_TOTAL_GB = {total_gb:.2f}")
+        print(f"GPU_FREE_GB = {free_gb:.2f}")
+        print(f"GPU_USED_GB = {total_gb - free_gb:.2f}\n")
+    except Exception:
+        pass
+
     print(f"GPU_AFTER_CONTEXT_GB = {gpu_after_ctx:.2f}")
     print(f"GPU_AFTER_SHARD_A_GB = {gpu_after_a:.2f}")
     print(f"GPU_AFTER_SHARD_B_GB = {gpu_after_b:.2f}\n")
+    
+    print(f"CACHE_OBJECT_IDENTITY_STABLE = {'YES' if not rebuild_target else 'NO'}")
     print(f"SHARD_B_TARGET_REBUILD = {'YES' if rebuild_target else 'NO'}")
     print(f"SHARD_B_GPU_REUPLOAD = {'YES' if reupload_gpu else 'NO'}\n")
     print(f"OUTPUT_ROWS = {output_rows}")
     print(f"DUPLICATE_PAIR_KEYS = {dups}")
     print(f"MAX_CANDIDATES_PER_S1 = {max_cands}\n")
+    
+    # 8. Tracker Counters
+    print(f"PRODUCTION_METHOD = generate_with_context")
+    print(f"NAME_TARGET_FIT_COUNT: {gen._NAME_TARGET_FIT_COUNT}")
+    print(f"ADDRESS_TARGET_FIT_COUNT: {gen._ADDRESS_TARGET_FIT_COUNT}")
+    print(f"EXACT_BUILD_COUNT: {gen._EXACT_BUILD_COUNT}")
+    print(f"RARE_BUILD_COUNT: {gen._RARE_BUILD_COUNT}")
+    print(f"NUMERIC_BUILD_COUNT: {gen._NUMERIC_BUILD_COUNT}")
+    print(f"GPU_TARGET_UPLOAD_COUNT: {gen._TARGET_GPU_UPLOAD_COUNT}\n")
     print(f"READY_FOR_FULL_C001 = {'YES' if passed else 'NO'}")
     print("============================================================")
     

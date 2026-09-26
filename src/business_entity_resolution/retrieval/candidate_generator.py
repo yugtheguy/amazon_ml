@@ -101,8 +101,14 @@ class CandidateGenerator:
         return final_union
 
     # ─────────────────────────────────────────────────────────────────────────
-    # OPTIMISED CONTEXT-BASED CHANNEL RUNNERS
+    # GLOBAL COUNTERS FOR SMOKE TEST PROOF
     # ─────────────────────────────────────────────────────────────────────────
+    _EXACT_BUILD_COUNT = 0
+    _RARE_BUILD_COUNT = 0
+    _NUMERIC_BUILD_COUNT = 0
+    _NAME_TARGET_FIT_COUNT = 0
+    _ADDRESS_TARGET_FIT_COUNT = 0
+    _TARGET_GPU_UPLOAD_COUNT = 0
 
     @staticmethod
     def _exact_from_ctx(s1: pd.DataFrame, ctx) -> pd.DataFrame:
@@ -345,6 +351,11 @@ class CandidateGenerator:
 
         Semantics: identical to generate().
         """
+        if target_ctx is None:
+            raise RuntimeError("CRITICAL: target_ctx is None in generate_with_context. Rebuild triggered unexpectedly.")
+            
+        logger.info("[R001] GENERATOR_MODE = CONTEXT_REUSE")
+        
         from .target_context import TargetContext, SourceCountryContext
 
         name_cfg = self.config.get("name_word", {})

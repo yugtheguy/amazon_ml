@@ -137,6 +137,10 @@ class TargetContext:
                 )
                 unique_keys = counts[counts["count"] == 1].drop(columns=["count"])
                 target_unique_name_df = target_valid_name.merge(unique_keys, on=["name_norm_clean", "country"])
+                
+                from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
+                CandidateGenerator._EXACT_BUILD_COUNT += 1
+                
                 logger.info(
                     "[TargetContext][%s][%s] Exact unique-name: %d rows (%.2fs)",
                     source_name, country, len(target_unique_name_df), time.time() - t_exact,
@@ -157,6 +161,10 @@ class TargetContext:
                             raw[tok].append(e_id)
                     rare_postings = {k: v for k, v in raw.items() if 0 < len(v) <= max_df_rare}
                     rare_df_map   = {k: len(v) for k, v in rare_postings.items()}
+                    
+                    from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
+                    CandidateGenerator._RARE_BUILD_COUNT += 1
+                    
                     logger.info(
                         "[TargetContext][%s][%s] Rare index: %d tokens (max_df=%d, %.2fs)",
                         source_name, country, len(rare_postings), max_df_rare, time.time() - t_rare,
@@ -177,6 +185,10 @@ class TargetContext:
                             raw_n[tok].append(e_id)
                     numeric_postings = {k: v for k, v in raw_n.items() if 0 < len(v) <= max_df_num}
                     numeric_df_map   = {k: len(v) for k, v in numeric_postings.items()}
+                    
+                    from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
+                    CandidateGenerator._NUMERIC_BUILD_COUNT += 1
+                    
                     logger.info(
                         "[TargetContext][%s][%s] Numeric index: %d tokens (max_df=%d, %.2fs)",
                         source_name, country, len(numeric_postings), max_df_num, time.time() - t_num,
@@ -192,11 +204,16 @@ class TargetContext:
                     if len(valid_name) > 0:
                         vec = TFIDF(**_vec_kwargs(name_cfg))
                         X_raw = vec.fit_transform(valid_name["name_norm_clean"])
+                        
+                        from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
+                        CandidateGenerator._NAME_TARGET_FIT_COUNT += 1
+                        
                         X_cpu: sp.csr_matrix = X_raw.get() if (HAS_CUML and hasattr(X_raw, "get")) else X_raw
                         X_gpu = None
                         if HAS_CUPY:
                             import cupyx.scipy.sparse as _cpx
                             X_gpu = _cpx.csr_matrix(X_cpu.T)  # uploaded ONCE
+                            CandidateGenerator._TARGET_GPU_UPLOAD_COUNT += 1
                         name_cache = ChannelTargetCache(
                             vec=vec, X_target_cpu=X_cpu, X_target_gpu=X_gpu,
                             cand_ids=valid_name["entity_id"].values,
@@ -218,11 +235,16 @@ class TargetContext:
                     if len(valid_addr) > 0:
                         vec = TFIDF(**_vec_kwargs(addr_cfg))
                         X_raw = vec.fit_transform(valid_addr["addr_norm_clean"])
+                        
+                        from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
+                        CandidateGenerator._ADDRESS_TARGET_FIT_COUNT += 1
+                        
                         X_cpu = X_raw.get() if (HAS_CUML and hasattr(X_raw, "get")) else X_raw
                         X_gpu = None
                         if HAS_CUPY:
                             import cupyx.scipy.sparse as _cpx
                             X_gpu = _cpx.csr_matrix(X_cpu.T)
+                            CandidateGenerator._TARGET_GPU_UPLOAD_COUNT += 1
                         addr_cache = ChannelTargetCache(
                             vec=vec, X_target_cpu=X_cpu, X_target_gpu=X_gpu,
                             cand_ids=valid_addr["entity_id"].values,
