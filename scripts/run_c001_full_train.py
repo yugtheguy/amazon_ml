@@ -651,6 +651,26 @@ if __name__ == "__main__":
     if args.processed_dir is None:
         args.processed_dir = os.path.join(args.data_dir, "processed", "v001")
 
+    s1_path = os.path.join(args.processed_dir, "train_source1.parquet")
+    s2_path = os.path.join(args.processed_dir, "train_source2.parquet")
+    s3_path = os.path.join(args.processed_dir, "train_source3.parquet")
+    config_path = args.config
+    
+    # Optional files depending on context, but require at least these 4 always
+    print("\n============================================================")
+    print("RESOLVED_PATHS:")
+    print(f"S1 = {s1_path}")
+    print(f"S2 = {s2_path}")
+    print(f"S3 = {s3_path}")
+    print(f"CONFIG = {config_path}")
+    print(f"OUTPUT_ROOT = {args.out_dir}")
+    print("============================================================\n")
+
+    for p in [s1_path, s2_path, s3_path, config_path]:
+        if not os.path.exists(p):
+            print(f"ERROR: Required path does not exist: {p}")
+            sys.exit(1)
+
     if args.country:
         run_worker(args)
     else:

@@ -9,6 +9,7 @@ import traceback
 import psutil
 import pandas as pd
 import numpy as np
+import argparse
 
 def get_host_ram_gb():
     return psutil.Process(os.getpid()).memory_info().rss / (1024 ** 3)
@@ -26,6 +27,33 @@ def main():
     print("C001 V2 SMOKE TEST")
     print("============================================================")
     
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--processed-dir", type=str, default="data/processed/v001")
+    args = parser.parse_args()
+
+    DATA_DIR = args.processed_dir
+    OUT_DIR = "artifacts/candidate_generation/C001_SMOKE_V2"
+    os.makedirs(OUT_DIR, exist_ok=True)
+    
+    s1_path = os.path.join(DATA_DIR, "train_source1.parquet")
+    s2_path = os.path.join(DATA_DIR, "train_source2.parquet")
+    s3_path = os.path.join(DATA_DIR, "train_source3.parquet")
+    config_path = "configs/c001_full_train.yaml"
+    
+    print("\n============================================================")
+    print("RESOLVED_PATHS:")
+    print(f"S1 = {s1_path}")
+    print(f"S2 = {s2_path}")
+    print(f"S3 = {s3_path}")
+    print(f"CONFIG = {config_path}")
+    print(f"OUTPUT_ROOT = {OUT_DIR}")
+    print("============================================================\n")
+    
+    for p in [s1_path, s2_path, s3_path, config_path]:
+        if not os.path.exists(p):
+            print(f"ERROR: Required path does not exist: {p}")
+            sys.exit(1)
+            
     # 1. PRODUCTION GPU ONLY
     if os.environ.get("ALLOW_CPU_TFIDF") == "1":
         print("ERROR: ALLOW_CPU_TFIDF is set to 1. Production GPU only.")
@@ -43,20 +71,16 @@ def main():
     # Import internals here after GPU check
     from src.business_entity_resolution.retrieval.candidate_generator import CandidateGenerator
     from src.business_entity_resolution.retrieval.target_context import TargetContext
-
-    DATA_DIR = "data/processed/v001"
-    OUT_DIR = "artifacts/candidate_generation/C001_SMOKE_V2"
-    os.makedirs(OUT_DIR, exist_ok=True)
-    
-    with open("configs/c001_full_train.yaml") as f:
+            
+    with open(config_path) as f:
         config = yaml.safe_load(f)
         
-    print("\nLoading full US target data...")
-    s2 = pd.read_parquet(os.path.join(DATA_DIR, "train_source2.parquet"), filters=[("country", "==", "US")])
-    s3 = pd.read_parquet(os.path.join(DATA_DIR, "train_source3.parquet"), filters=[("country", "==", "US")])
+    print(f"\nLoading full US target data from {DATA_DIR}...")
+    s2 = pd.read_parquet(s2_path, filters=[("country", "==", "US")])
+    s3 = pd.read_parquet(s3_path, filters=[("country", "==", "US")])
     
     print("Loading 10k US query data...")
-    s1 = pd.read_parquet(os.path.join(DATA_DIR, "train_source1.parquet"), filters=[("country", "==", "US")]).head(10000)
+    s1 = pd.read_parquet(s1_path, filters=[("country", "==", "US")]).head(10000)
     
     target_rows_s2 = len(s2)
     target_rows_s3 = len(s3)
@@ -161,6 +185,10 @@ def main():
     
     if not passed:
         sys.exit(1)
+        
+    # Write explicit machine-readable success marker
+    with open(os.path.join(OUT_DIR, "C001_SMOKE_V2_PASS.json"), "w") as f:
+        json.dump({"status": "PASS"}, f)
 
 if __name__ == "__main__":
     try:
